@@ -37,6 +37,21 @@ curl -fsSL https://raw.githubusercontent.com/juliusmarkwei/ghost-writer/main/ins
 
 This will install `ghost-writer` to your path. You can then run it simply by typing `ghost-writer` (or `index.sh` if running locally).
 
+## Uninstall
+
+To remove `ghost-writer` from your system, simply delete the executable:
+
+```bash
+# MacOS / Linux (if installed to /usr/local/bin)
+sudo rm /usr/local/bin/ghost-writer
+
+# MacOS / Linux (if installed to ~/.local/bin)
+rm ~/.local/bin/ghost-writer
+
+# Windows (Git Bash)
+rm ~/bin/ghost-writer
+```
+
 ## Usage
 
 Make the script executable:
