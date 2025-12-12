@@ -15,11 +15,14 @@ echo "Detected OS: $OS_NAME"
 
 # Determine Install Path
 if [[ "$OS_NAME" == "Darwin" ]] || [[ "$OS_NAME" == "Linux" ]]; then
-    INSTALL_DIR="/usr/local/bin"
-    if [[ ! -w "$INSTALL_DIR" ]]; then
-        echo "Needs sudo access to write to $INSTALL_DIR"
-        USE_SUDO="sudo"
+    # Try /usr/local/bin first (best for PATH), but fallback to user dir to avoid password
+    if [[ -w "/usr/local/bin" ]]; then
+        INSTALL_DIR="/usr/local/bin"
+        USE_SUDO=""
     else
+        # /usr/local/bin is protected, install to user's local bin
+        INSTALL_DIR="$HOME/.local/bin"
+        mkdir -p "$INSTALL_DIR"
         USE_SUDO=""
     fi
 else
