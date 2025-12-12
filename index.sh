@@ -148,13 +148,14 @@ function show_help {
 }
 
 # Argument Parsing
+USER_PROVIDED_SOURCE=false
 while [[ "$#" -gt 0 ]]; do
     case $1 in
         -d|--duration) DURATION_MINUTES="$2"; shift ;;
         --min-delay) MIN_DELAY_MS="$2"; shift ;;
         --max-delay) MAX_DELAY_MS="$2"; shift ;;
         --name) SUBPROJECT_NAME="$2"; shift ;;
-        --source) SOURCE_FILE_RELATIVE="$2"; shift ;;
+        --source) SOURCE_FILE_RELATIVE="$2"; USER_PROVIDED_SOURCE=true; shift ;;
         -h|--help) show_help ;;
         *) echo "Unknown parameter passed: $1"; exit 1 ;;
     esac
@@ -182,22 +183,38 @@ echo "Detected project root: $ROOT_PATH"
 
 SOURCE_PATH="$ROOT_PATH/$SOURCE_FILE_RELATIVE"
 
-# Fallback Source Detection
-if [[ ! -f "$SOURCE_PATH" ]]; then
-    # Try common alternatives if the default was not explicitly overridden (or even if it was, maybe warn?)
-    # For now, let's just checking common paths if the specific one fails.
-    if [[ -f "$ROOT_PATH/src/index.ts" ]]; then
-        echo "Warning: '$SOURCE_FILE_RELATIVE' not found. Using 'src/index.ts' instead."
-        SOURCE_PATH="$ROOT_PATH/src/index.ts"
+# strict source handling
+if [[ "$USER_PROVIDED_SOURCE" == "true" ]]; then
+    if [[ ! -e "$SOURCE_PATH" ]]; then
+        echo "❌  Error: Specified source '$SOURCE_PATH' not found."
+        exit 1
+    fi
+    echo "Using user-specified source: $SOURCE_PATH"
+else
+    # Auto-detection loop for default paths
+    # If explicit source NOT provided, search defaults, else fallback to embedded test
+    FOUND_DEFAULT=false
+
+    # Try defaults only if they exist
+    if [[ -f "$ROOT_PATH/src/app/main/index.ts" ]]; then
+         SOURCE_PATH="$ROOT_PATH/src/app/main/index.ts"
+         FOUND_DEFAULT=true
+    elif [[ -f "$ROOT_PATH/src/index.ts" ]]; then
+         SOURCE_PATH="$ROOT_PATH/src/index.ts"
+         FOUND_DEFAULT=true
     elif [[ -f "$ROOT_PATH/index.ts" ]]; then
-        echo "Warning: '$SOURCE_FILE_RELATIVE' not found. Using 'index.ts' instead."
-        SOURCE_PATH="$ROOT_PATH/index.ts"
-    else
-        echo "Warning: Default source file not found. Generating detailed test source..."
+         SOURCE_PATH="$ROOT_PATH/index.ts"
+         FOUND_DEFAULT=true
+    fi
+
+    if [[ "$FOUND_DEFAULT" == "false" ]]; then
+        echo "Warning: No default source file found. Generating detailed test source..."
         ECHO_FILE="$ROOT_PATH/default_simulation_source.ts"
         echo "$DEFAULT_CONTENT" > "$ECHO_FILE"
         SOURCE_PATH="$ECHO_FILE"
         GENERATED_SOURCE=true
+    else
+        echo "Using detected default source: $SOURCE_PATH"
     fi
 fi
 
@@ -506,6 +523,63 @@ function wait_for_safe_focus {
 }
 
 # Main Loop
+# Function to simulate typing for a single file
+function simulate_typing_session {
+    local source_file="$1"
+
+    # Extract extension
+    local filename=$(basename "$source_file")
+    local extension="${filename##*.}"
+    if [[ "$filename" == "$extension" ]]; then extension="txt"; fi
+
+    # Unique target file (with random to prevent collision in fast loops)
+    local unique_id="$(date +%s)_$RANDOM"
+    local target_file="$SUBPROJECT_PATH/${unique_id}_${filename}"
+
+    touch "$target_file"
+    echo "Opening $target_file ..."
+
+    if [[ "$OS_NAME" == "Darwin" ]]; then
+        open "$target_file"
+    elif [[ "$OS_NAME" == "Linux" ]]; then
+        xdg-open "$target_file" || code "$target_file" || nano "$target_file"
+    else
+        start "$target_file" 2>/dev/null || echo "Please open file manually: $target_file"
+    fi
+
+    # Countdown (only short one for subsequent files?)
+    echo "⚠️  Focus editor! (3s)..."
+    sleep 3
+
+    # Capture mouse (restart monitor for each file to be safe?)
+    local initial_mouse=$(get_mouse_pos)
+    monitor_mouse "$initial_mouse" "$$" &
+    local monitor_pid=$!
+
+    echo "Typing content from $source_file..."
+
+    while IFS= read -r line || [[ -n "$line" ]]; do
+        # Random Thinking Pause
+        if (( RANDOM % 20 == 0 )); then
+            local pause=$(( 30 + RANDOM % 31 ))
+            echo "🧠  Thinking for ${pause}s..."
+            sleep "$pause"
+        fi
+
+        # Trim leading whitespace logic
+        local trimmed="${line#"${line%%[![:space:]]*}"}"
+
+        echo "Typing: ${trimmed:0:20}..."
+        type_text "$trimmed"
+        sleep 0.2
+    done < "$source_file"
+
+    # Cleanup monitor for this file
+    kill "$monitor_pid" 2>/dev/null
+    wait "$monitor_pid" 2>/dev/null
+}
+
+# Main Loop
 while true; do
     CURRENT_TIME=$(date +%s)
     ELAPSED=$((CURRENT_TIME - START_TIME))
@@ -516,85 +590,34 @@ while true; do
     echo ""
     echo "--- Starting new cycle ---"
 
-    # Setup Subproject
-    # Aggressive cleanup
+    # One-time cleanup per cycle
     if [[ -d "$SUBPROJECT_PATH" ]]; then
         rm -rf "$SUBPROJECT_PATH"
     fi
     mkdir -p "$SUBPROJECT_PATH"
 
-    # Extract extension from source file to maintain language highlights
-    # If source path has no extension, default to .txt or keep empty
-    filename=$(basename "$SOURCE_PATH")
-    extension="${filename##*.}"
-
-    # Handle case where file has no extension
-    if [[ "$filename" == "$extension" ]]; then
-        extension="txt"
-    fi
-
-    # Generate unique filename to bypass editor buffer caching/auto-save
-    # This ensures a fresh tab/buffer is always used.
-    TARGET_FILE="$SUBPROJECT_PATH/index_$(date +%s).$extension"
-    touch "$TARGET_FILE"
-
-    echo "Opening $TARGET_FILE ..."
-    # Open Editor (Cross platform)
-    if [[ "$OS_NAME" == "Darwin" ]]; then
-        open "$TARGET_FILE"
-    elif [[ "$OS_NAME" == "Linux" ]]; then
-        xdg-open "$TARGET_FILE" || code "$TARGET_FILE" || nano "$TARGET_FILE"
+    # Build File List
+    FILES_TO_PROCESS=()
+    if [[ -d "$SOURCE_PATH" ]]; then
+        while IFS= read -r -d '' file; do
+            FILES_TO_PROCESS+=("$file")
+        done < <(find "$SOURCE_PATH" -type f ! -path '*/.*' -print0)
     else
-        start "$TARGET_FILE" 2>/dev/null || echo "Please open file manually: $TARGET_FILE"
+        FILES_TO_PROCESS+=("$SOURCE_PATH")
     fi
 
-    # Countdown
-    echo ""
-    echo "⚠️  PLEASE FOCUS THE TEXT EDITOR WINDOW NOW! (5 seconds warning) ⚠️"
-    for i in {5..1}; do
-        echo -n "$i... "
-        sleep 1
+    echo "Files to process in this cycle: ${#FILES_TO_PROCESS[@]}"
+
+    for file in "${FILES_TO_PROCESS[@]}"; do
+         # Check duration again inside file loop
+         CURRENT_TIME=$(date +%s)
+         if [[ $((CURRENT_TIME - START_TIME)) -ge "$DURATION_SEC" ]]; then break; fi
+
+         simulate_typing_session "$file"
+         sleep 1
     done
-    echo ""
-    echo "Starting typing simulation..."
 
-    # Capture initial mouse position for monitoring
-    INITIAL_MOUSE_POS=$(get_mouse_pos)
-    # Start monitoring in background
-    monitor_mouse "$INITIAL_MOUSE_POS" "$$" &
-    MONITOR_PID=$!
-
-    # Read file line by line
-    # IFS= prevents trimming leading/trailing whitespace
-    while IFS= read -r line || [[ -n "$line" ]]; do
-
-        # Random "Thinking" Pause (Realism)
-        # 5% chance (approx 1 in 20 lines) to pause for 30s+
-        if (( RANDOM % 20 == 0 )); then
-            pause_duration=$(( 30 + RANDOM % 31 )) # 30 to 60 seconds
-            echo ""
-            echo "🧠  Thinking/Pause for ${pause_duration}s... (User can take control)"
-            sleep "$pause_duration"
-            echo "▶️  Resuming typing..."
-        fi
-
-        # Safety Check: Pause if user switched away to a browser/slack
-        # User requested to disable app detection ("Just type where the Kesa is")
-        # wait_for_safe_focus
-
-        # Trim leading whitespace to avoid "stair-stepping" (double indentation)
-        # caused by editor auto-indent + script typing spaces.
-        trimmed_line="${line#"${line%%[![:space:]]*}"}"
-
-        echo "Typing: ${trimmed_line:0:20}..."
-        type_text "$trimmed_line"
-        sleep 0.5
-
-        # Check loop exit condition inside inner loop to be responsive?
-        # Or finish the file. Let's finish the file.
-    done < "$SOURCE_PATH"
-
-    echo "Finished typing file. Waiting before restart..."
+    echo "Cycle complete. Waiting before restart..."
     sleep 2
 
     REMAINING=$(( (DURATION_SEC - (date +%s - START_TIME)) / 60 ))

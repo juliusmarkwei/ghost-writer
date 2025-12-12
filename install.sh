@@ -46,7 +46,6 @@ else
 fi
 
 # Make Executable
-echo "Setting permissions..."
 $USE_SUDO chmod +x "$INSTALL_DIR/$SCRIPT_NAME"
 
 # Install Dependencies (Linux only)
