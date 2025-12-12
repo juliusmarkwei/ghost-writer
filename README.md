@@ -11,7 +11,7 @@ A cross-platform CLI tool that simulates a developer typing code. It reads a sou
 *   **Looping Mode**: Runs continuously (default 30 minutes), recreating the session after each cycle.
 
 -   **Language Agnostic**: Dynamically detects source file extension (e.g., `.py`, `.go`) and creates a matching simulation file.
--   **Safe Editor Enforcement**: Only types when a safe editor (VSCode, JetBrains, Terminal, etc.) is focused. Pauses automatically if you switch to a browser or other app.
+-   **Active Window Typing**: Types continuously into whatever window currently has focus.
 -   **Auto-Termination**: Instantly stops the simulation if you move the mouse.
 -   **Robust Cleanup**: Ensures a unique, fresh file is created for every loop cycle to prevent appending or caching issues.
 -   **Cross-Platform**:
