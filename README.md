@@ -342,13 +342,13 @@ To remove `ghost-writer` from your system:
 
 ```bash
 # macOS/Linux (if installed to /usr/local/bin)
-sudo rm /usr/local/bin/ghost-writer
+rm -r /usr/local/bin/ghost-writer
 
 # macOS/Linux (if installed to ~/.local/bin)
-rm ~/.local/bin/ghost-writer
+rm -r ~/.local/bin/ghost-writer
 
 # Windows (Git Bash)
-rm ~/bin/ghost-writer
+rm -r ~/bin/ghost-writer
 ```
 
 **Optional**: Remove generated test source if it was created:
