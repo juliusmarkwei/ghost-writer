@@ -5,17 +5,11 @@ DURATION_MINUTES=30
 MIN_DELAY_MS=100
 MAX_DELAY_MS=300
 SUBPROJECT_NAME="simulation-subproject"
-SOURCE_FILE_RELATIVE="src/app/main/index.ts"
+SOURCE_FILE_RELATIVE=""
+MOUSE_MONITOR_ACTIVE=false
 
 # Embedded Comprehensive Source (TypeScript)
 read -r -d '' DEFAULT_CONTENT << 'EOF'
-/**
- * Enterprise Grade Nothing-Doer
- * -------------------------------------------------------------------------
- * This file contains highly sophisticated logic for achieving absolutely nothing.
- * It is structured to simulate a complex enterprise application component.
- */
-
 interface VoidConfig {
     redundancyLevel: number;
     echoChamberEnabled: boolean;
@@ -136,14 +130,15 @@ function show_help {
     echo "  --min-delay <ms>       Minimum delay between keystrokes (default: 100)"
     echo "  --max-delay <ms>       Maximum delay between keystrokes (default: 300)"
     echo "  --name <name>          Name of subproject (default: simulation-subproject)"
-    echo "  --source <path>        Relative path to source file (default: src/app/main/index.ts)"
+    echo "  --source <path>        Relative or absolute path to source file/directory"
     echo "  -h, --help             Show this help message"
     echo ""
     echo "Examples:"
-    echo "  ghost-writer --duration 60               # Run for 1 hour"
+    echo "  ghost-writer --duration 60               # Run for 1 hour with default source"
     echo "  ghost-writer --min-delay 50 --max-delay 150 # Type faster"
     echo "  ghost-writer --name my-project           # Custom subproject name"
     echo "  ghost-writer --source src/utils.ts       # Type a specific file"
+    echo "  ghost-writer --source src/               # Process all files in directory"
     exit 0
 }
 
@@ -181,50 +176,7 @@ function find_project_root {
 ROOT_PATH=$(find_project_root)
 echo "Detected project root: $ROOT_PATH"
 
-SOURCE_PATH="$ROOT_PATH/$SOURCE_FILE_RELATIVE"
-
-# strict source handling
-if [[ "$USER_PROVIDED_SOURCE" == "true" ]]; then
-    if [[ ! -e "$SOURCE_PATH" ]]; then
-        echo "❌  Error: Specified source '$SOURCE_PATH' not found."
-        exit 1
-    fi
-    echo "Using user-specified source: $SOURCE_PATH"
-else
-    # Auto-detection loop for default paths
-    # If explicit source NOT provided, search defaults, else fallback to embedded test
-    FOUND_DEFAULT=false
-
-    # Try defaults only if they exist
-    if [[ -f "$ROOT_PATH/src/app/main/index.ts" ]]; then
-         SOURCE_PATH="$ROOT_PATH/src/app/main/index.ts"
-         FOUND_DEFAULT=true
-    elif [[ -f "$ROOT_PATH/src/index.ts" ]]; then
-         SOURCE_PATH="$ROOT_PATH/src/index.ts"
-         FOUND_DEFAULT=true
-    elif [[ -f "$ROOT_PATH/index.ts" ]]; then
-         SOURCE_PATH="$ROOT_PATH/index.ts"
-         FOUND_DEFAULT=true
-    fi
-
-    if [[ "$FOUND_DEFAULT" == "false" ]]; then
-        echo "Warning: No default source file found. Generating detailed test source..."
-        ECHO_FILE="$ROOT_PATH/default_simulation_source.ts"
-        echo "$DEFAULT_CONTENT" > "$ECHO_FILE"
-        SOURCE_PATH="$ECHO_FILE"
-        GENERATED_SOURCE=true
-    else
-        echo "Using detected default source: $SOURCE_PATH"
-    fi
-fi
-
-SUBPROJECT_PATH="$ROOT_PATH/$SUBPROJECT_NAME"
-TARGET_FILE="$SUBPROJECT_PATH/index.ts"
-
 # Validating OS
-OS_NAME=$(uname -s)
-echo "Detected OS: $OS_NAME"
-
 OS_NAME=$(uname -s)
 echo "Detected OS: $OS_NAME"
 
@@ -270,163 +222,270 @@ function check_dependencies {
              echo "✅  'powershell.exe' found."
         fi
     else
-        # macOS
+        # macOS - no dependencies to install
         if ! command -v osascript &> /dev/null; then
              echo "❌  Error: 'osascript' not found (this is unexpected on macOS)."
              exit 1
         fi
         echo "✅  'osascript' found."
     fi
+
+    # Vim Requirement (All Platforms)
+    if ! command -v vim &> /dev/null; then
+        echo "❌  Error: 'vim' editor not found."
+        echo "    Please install vim:"
+        if [[ "$OS_NAME" == "Darwin" ]]; then
+            echo "    brew install vim"
+        elif [[ "$OS_NAME" == "Linux" ]]; then
+            echo "    sudo apt-get install vim  (or equivalent for your distro)"
+        fi
+        exit 1
+    fi
+    echo "✅  'vim' found."
 }
 
 check_dependencies
 
-# Function to type text
-function type_text {
-    local text="$1"
+# Source Path Handling
+if [[ "$USER_PROVIDED_SOURCE" == "true" ]]; then
+    # User specified a source - validate it exists
+    # Handle both absolute and relative paths
+    if [[ "$SOURCE_FILE_RELATIVE" == /* ]]; then
+        # Absolute path
+        SOURCE_PATH="$SOURCE_FILE_RELATIVE"
+    else
+        # Relative path
+        SOURCE_PATH="$ROOT_PATH/$SOURCE_FILE_RELATIVE"
+    fi
+
+    if [[ ! -e "$SOURCE_PATH" ]]; then
+        echo "❌  Error: Specified source '$SOURCE_PATH' does not exist."
+        exit 1
+    fi
+
+    if [[ -d "$SOURCE_PATH" ]]; then
+        echo "✅ Using user-specified directory: $SOURCE_PATH"
+    else
+        echo "✅ Using user-specified file: $SOURCE_PATH"
+    fi
+else
+    # No source specified - try defaults first, then use embedded content
+    SOURCE_PATH=""
+    FOUND_DEFAULT=false
+
+    # Try default paths
+    if [[ -f "$ROOT_PATH/src/app/main/index.ts" ]]; then
+         SOURCE_PATH="$ROOT_PATH/src/app/main/index.ts"
+         FOUND_DEFAULT=true
+    elif [[ -f "$ROOT_PATH/src/index.ts" ]]; then
+         SOURCE_PATH="$ROOT_PATH/src/index.ts"
+         FOUND_DEFAULT=true
+    elif [[ -f "$ROOT_PATH/index.ts" ]]; then
+         SOURCE_PATH="$ROOT_PATH/index.ts"
+         FOUND_DEFAULT=true
+    fi
+
+    if [[ "$FOUND_DEFAULT" == "false" ]]; then
+        echo "⚠️  No default source file found. Generating test source..."
+        ECHO_FILE="$ROOT_PATH/default_simulation_source.ts"
+        echo "$DEFAULT_CONTENT" > "$ECHO_FILE"
+        SOURCE_PATH="$ECHO_FILE"
+        GENERATED_SOURCE=true
+        echo "✅ Generated test source at: $SOURCE_PATH"
+    else
+        echo "✅ Using detected default source: $SOURCE_PATH"
+    fi
+fi
+
+SUBPROJECT_PATH="$ROOT_PATH/$SUBPROJECT_NAME"
+KNOWN_EDITOR_APP=""
+
+# Function to save the current file in Vim
+function save_file {
+    echo "💾 Saving file (:w)..."
 
     if [[ "$OS_NAME" == "Darwin" ]]; then
-        # macOS: Use AppleScript
-        # We need to escape special characters for AppleScript string
-        # This is tricky in bash. Using a simpler approach:
-        # Create a temporary file with the text, read it in AppleScript loop?
-        # Better: create a comprehensive AppleScript to handle the whole typing of a string
-
-        # Escaping for AppleScript string:
-        # \ -> \\
-        # " -> \"
-        local safe_text=$(echo "$text" | sed 's/\\/\\\\/g' | sed 's/"/\\"/g')
-
-        # Execute and capture error
-        if ! output=$(osascript -e "
-            set textToType to \"$safe_text\"
-            delay 0.05
-            repeat with i from 1 to count of characters of textToType
-                set char to character i of textToType
-                tell application \"System Events\" to keystroke char
-                delay (random number from ($MIN_DELAY_MS / 1000) to ($MAX_DELAY_MS / 1000))
-            end repeat
-            tell application \"System Events\" to key code 36 -- Enter
-        " 2>&1); then
-            if [[ "$output" == *"not allowed to send keystrokes"* ]]; then
-                echo "❌  ERROR: macOS Permission Denied"
-                echo "    Go to System Settings > Privacy & Security > Accessibility"
-                echo "    Ensure your Terminal/Editor is CHECKED."
-                exit 1
-            else
-                echo "Error typing: $output"
-            fi
-        fi
+        # macOS: Escape to normal mode, then :w to save
+        osascript -e 'tell application "System Events" to key code 53' 2>/dev/null  # Escape
+        sleep 0.2
+        osascript -e 'tell application "System Events" to keystroke ":w"' 2>/dev/null
+        sleep 0.1
+        osascript -e 'tell application "System Events" to key code 36' 2>/dev/null  # Enter
     elif [[ "$OS_NAME" == "Linux" ]]; then
-        # Linux: Use xdotool
-        # Simulating random delay per char in pure bash loop + xdotool is slow.
-        # xdotool has --delay but it is fixed.
-        # We will try to loop chars in bash.
-        local len=${#text}
-        for (( i=0; i<len; i++ )); do
-            char="${text:$i:1}"
-            xdotool type --delay 0 "$char"
-            # sleep supports decimals? usually no in strict sh, yes in bash/coreutils
-            # bash arithmetic $((...)) does integer only.
-            # Using python or perl for random float sleep if needed, or just sleep 0.something
-            # Simplified: random number between min/max ms.
-            # integer random:
-            local delay_ms=$(( MIN_DELAY_MS + RANDOM % (MAX_DELAY_MS - MIN_DELAY_MS + 1) ))
-            local delay_sec=$(awk "BEGIN {print $delay_ms/1000}")
-            sleep "$delay_sec"
-        done
+        # Linux: Escape, :w, Enter
+        xdotool key Escape
+        sleep 0.2
+        xdotool type ":w"
+        sleep 0.1
         xdotool key Return
     else
-        # Windows (Git Bash/WSL/Cygwin)
-        # We use PowerShell's SendKeys to simulate typing.
-        # Note: ' needs to be escaped for PowerShell.
-
-        # Escape single quotes for PowerShell string: ' -> ''
-        local ps_text="${text//\'/\'\'}"
-        # Escape double quotes: " -> \"
-        ps_text="${ps_text//\"/\\\"}"
-
-        # PowerShell command to send keys
-        # We use a simple sleep for delay (not per-character random in this simple version,
-        # but we can do a loop in PS if needed. For simplicity/speed in PS startup,
-        # we'll just send the whole line or chunks).
-        # Actually, SendKeys is instant. To mimic typing, we need a loop in PS.
-
+        # Windows: Escape, :w, Enter
         powershell.exe -Command "
             Add-Type -AssemblyName System.Windows.Forms
-            \$text = '$ps_text'
-            foreach (\$char in \$text.ToCharArray()) {
-                [System.Windows.Forms.SendKeys]::SendWait(\$char)
-                Start-Sleep -Milliseconds $(($MIN_DELAY_MS + ($RANDOM % ($MAX_DELAY_MS - $MIN_DELAY_MS + 1))))
-            }
+            [System.Windows.Forms.SendKeys]::SendWait('{ESC}')
+            Start-Sleep -Milliseconds 200
+            [System.Windows.Forms.SendKeys]::SendWait(':w')
+            Start-Sleep -Milliseconds 100
             [System.Windows.Forms.SendKeys]::SendWait('{ENTER}')
+        " > /dev/null 2>&1
+    fi
+
+    sleep 0.3
+
+    # Return to Insert mode for continued typing
+    if [[ "$OS_NAME" == "Darwin" ]]; then
+        osascript -e 'tell application "System Events" to keystroke "i"' 2>/dev/null
+    elif [[ "$OS_NAME" == "Linux" ]]; then
+        xdotool type "i"
+    else
+        powershell.exe -Command "
+            Add-Type -AssemblyName System.Windows.Forms
+            [System.Windows.Forms.SendKeys]::SendWait('i')
+        " > /dev/null 2>&1
+    fi
+    sleep 0.2
+}
+
+
+
+# Function to send forward delete (to remove auto-completed closing chars)
+function send_forward_delete {
+    local count="${1:-1}"
+
+    if [[ "$OS_NAME" == "Darwin" ]]; then
+        for (( i=0; i<count; i++ )); do
+            # Key code 117 is Forward Delete on macOS
+            osascript -e 'tell application "System Events" to key code 117' 2>/dev/null
+            sleep 0.05
+        done
+    elif [[ "$OS_NAME" == "Linux" ]]; then
+        for (( i=0; i<count; i++ )); do
+            xdotool key Delete
+            sleep 0.05
+        done
+    else
+        powershell.exe -Command "
+            Add-Type -AssemblyName System.Windows.Forms
+            for (\$i = 0; \$i -lt $count; \$i++) {
+                [System.Windows.Forms.SendKeys]::SendWait('{DELETE}')
+                Start-Sleep -Milliseconds 50
+            }
         " > /dev/null 2>&1
     fi
 }
 
+# Function to type a single character
+function type_char {
+    local char="$1"
+
+    if [[ "$OS_NAME" == "Darwin" ]]; then
+        osascript -e "tell application \"System Events\" to keystroke \"$char\"" 2>/dev/null
+    elif [[ "$OS_NAME" == "Linux" ]]; then
+        xdotool type --delay 0 "$char"
+    else
+        local escaped_char="${char//\'/\'\'}"
+        powershell.exe -Command "
+            Add-Type -AssemblyName System.Windows.Forms
+            [System.Windows.Forms.SendKeys]::SendWait('$escaped_char')
+        " > /dev/null 2>&1
+    fi
+}
+
+
+# Function to type text character by character
+function type_text {
+    local text="$1"
+    local len=${#text}
+
+    # Type character by character
+    for (( i=0; i<len; i++ )); do
+        local char="${text:$i:1}"
+        type_char "$char"
+        # Random delay between keystrokes
+        local delay_ms=$(( MIN_DELAY_MS + RANDOM % (MAX_DELAY_MS - MIN_DELAY_MS + 1) ))
+        local delay_sec=$(awk "BEGIN {print $delay_ms/1000}")
+        sleep "$delay_sec"
+    done
+
+    # Press Enter at the end of the line (simple for Nano - no auto-complete to deal with)
+    sleep 0.1
+    if [[ "$OS_NAME" == "Darwin" ]]; then
+        osascript -e 'tell application "System Events" to key code 36' 2>/dev/null
+    elif [[ "$OS_NAME" == "Linux" ]]; then
+        xdotool key Return
+    else
+        powershell.exe -Command "
+            Add-Type -AssemblyName System.Windows.Forms
+            [System.Windows.Forms.SendKeys]::SendWait('{ENTER}')
+        " > /dev/null 2>&1
+    fi
+    sleep 0.1
+}
+
+
 # Mouse Position Helper
 function get_mouse_pos {
     if [[ "$OS_NAME" == "Darwin" ]]; then
-        # macOS: Use Python ctypes to get mouse location from CoreGraphics
         python3 -c "
 import ctypes
 import ctypes.util
 
-# Load CoreGraphics framework
 cg_path = ctypes.util.find_library('CoreGraphics')
 if not cg_path:
-    # Fallback for some systems? Usually standard.
     print('0,0')
     exit()
 
 cg = ctypes.cdll.LoadLibrary(cg_path)
 
-# Define types
 class CGPoint(ctypes.Structure):
     _fields_ = [('x', ctypes.c_double), ('y', ctypes.c_double)]
 
-# CGEventCreate(source) -> event
 cg.CGEventCreate.restype = ctypes.c_void_p
 cg.CGEventCreate.argtypes = [ctypes.c_void_p]
-
-# CGEventGetLocation(event) -> CGPoint
 cg.CGEventGetLocation.restype = CGPoint
 cg.CGEventGetLocation.argtypes = [ctypes.c_void_p]
 
-# Create event (NULL source) and get location
 event = cg.CGEventCreate(None)
 loc = cg.CGEventGetLocation(event)
 print(f'{int(loc.x)},{int(loc.y)}')
 " 2>/dev/null || echo "0,0"
 
     elif [[ "$OS_NAME" == "Linux" ]]; then
-        # output: x: 123 y: 456 screen: 0 window: 12345
         xdotool getmouselocation --shell 2>/dev/null | grep -E "X=|Y=" | tr '\n' ',' | sed 's/X=//;s/Y=//;s/,$//'
-        # result: 123,456
     else
-        # Windows PowerShell
         powershell.exe -Command "[System.Reflection.Assembly]::LoadWithPartialName('System.Windows.Forms') | Out-Null; \$pos = [System.Windows.Forms.Cursor]::Position; Write-Host \"\$(\$pos.X),\$(\$pos.Y)\"" 2>/dev/null | tr -d '\r'
     fi
 }
 
+# Improved mouse monitor with proper termination
 function monitor_mouse {
     local initial_pos="$1"
     local main_pid="$2"
 
-    echo "Using initial mouse position: $initial_pos" >> /dev/null
+    echo "🖱️  Mouse monitor started (PID: $, monitoring: $main_pid)"
 
-    while kill -0 "$main_pid" 2>/dev/null; do
+    while true; do
+        # Check if main process is still running
+        if ! kill -0 "$main_pid" 2>/dev/null; then
+            echo "🖱️  Main process ended, stopping mouse monitor"
+            break
+        fi
+
         current_pos=$(get_mouse_pos)
 
-        # Check if valid (not empty/error)
+        # Check for movement (with better validation)
         if [[ -n "$current_pos" && "$current_pos" != "0,0" && "$current_pos" != "$initial_pos" ]]; then
             echo ""
-            echo "🛑  Mouse movement detected! Terminating simulation for user control."
-            kill -INT "$main_pid" 2>/dev/null
-            break
+            echo "🛑  Mouse movement detected! ($initial_pos → $current_pos)"
+            echo "🛑  Terminating simulation..."
+            kill -TERM "$main_pid" 2>/dev/null
+            MOUSE_MONITOR_ACTIVE=false
+            exit 0
         fi
         sleep 0.5
     done
+
+    echo "🖱️  Mouse monitor ended"
 }
 
 # Active Application Helper
@@ -434,22 +493,19 @@ function get_active_app {
     if [[ "$OS_NAME" == "Darwin" ]]; then
         osascript -e 'tell application "System Events" to get name of first application process whose frontmost is true' 2>/dev/null
     elif [[ "$OS_NAME" == "Linux" ]]; then
-        # Try finding window class name
         id=$(xdotool getactivewindow 2>/dev/null)
         if [[ -n "$id" ]]; then
             xdotool getwindowclassname "$id" 2>/dev/null
         fi
     else
-        # Windows handling (Generic fallback for now to avoid blocking)
         echo "Windows_Generic"
     fi
 }
 
 function is_safe_app {
     local app_name="$1"
-    # Whitelist
     case "$app_name" in
-        *Code*|*VSCode*|*Antigravity*|*Kersa*|*Windsurf*|*TextEdit*|*Notepad*|*gedit*|*kate*|*iTerm*|*Warp*|*Alacritty*|*Hyper*|*kitty*|*Windows_Generic*)
+        *Code*|*VSCode*|*Electron*|*Cursor*|*Windsurf*|*TextEdit*|*Notepad*|*gedit*|*kate*|*vim*|*nvim*|*emacs*|*iTerm*|*Terminal*|*Warp*|*Alacritty*|*Hyper*|*kitty*|*Windows_Generic*)
             return 0
             ;;
         *)
@@ -462,164 +518,345 @@ function refocus_app {
     local app_name="$1"
 
     if [[ "$OS_NAME" == "Darwin" ]]; then
+        # For macOS, try to activate Terminal (for Nano)
+        osascript -e 'tell application "Terminal" to activate' 2>/dev/null || \
         osascript -e "tell application \"$app_name\" to activate" 2>/dev/null
     elif [[ "$OS_NAME" == "Linux" ]]; then
-        # Search for window by class name or name and activate
         xdotool search --name "$app_name" windowactivate 2>/dev/null || xdotool search --class "$app_name" windowactivate 2>/dev/null
     else
-        # Windows: Creating a thorough focus switcher in one-line PS is hard, but we can try AppActivate
-        # Note: AppActivate works by Title, not process name usually.
         powershell.exe -Command "(New-Object -ComObject WScript.Shell).AppActivate('$app_name')" 2>/dev/null
     fi
 }
 
-function wait_for_safe_focus {
-    local last_log=""
 
-    # Check current app
+function wait_for_safe_focus {
     local current_app=$(get_active_app)
 
-    # If currently safe, update our "Known Good Editor" tracker
+    # If currently safe, update our tracker and return immediately
     if is_safe_app "$current_app"; then
-        KNOWN_EDITOR_APP="$current_app"
+        if [[ -z "$KNOWN_EDITOR_APP" ]]; then
+            KNOWN_EDITOR_APP="$current_app"
+            echo "✅ Detected editor: $current_app"
+        fi
         return 0
     fi
 
-    # If we are NOT in a safe app, but we knew one previously, TRY TO REFOCUS IT
+    # Not in safe app - try to refocus if we know a good one
     if [[ -n "$KNOWN_EDITOR_APP" ]]; then
-         echo -ne "\r🔄  Lost focus to '$current_app'. Refocusing '$KNOWN_EDITOR_APP'...   "
+         echo -ne "\r🔄  Refocusing editor...   "
          refocus_app "$KNOWN_EDITOR_APP"
          sleep 0.5
 
-         # Check if it worked
          current_app=$(get_active_app)
          if is_safe_app "$current_app"; then
-             # Clear line and return
              echo -ne "\r                                                                           \r"
              return 0
          fi
     fi
 
-    # Fallback: Loop and wait if refocus failed or no known editor yet
+    # Wait for user to focus a safe app
+    local last_log=""
     while true; do
         current_app=$(get_active_app)
         if is_safe_app "$current_app"; then
             KNOWN_EDITOR_APP="$current_app"
+            echo -ne "\r                                                                           \r"
+            echo "✅ Editor focused: $current_app"
             break
         fi
 
-        # Log only if the app has changed to avoid spamming
         if [[ "$current_app" != "$last_log" ]]; then
              echo ""
-             echo "🚫  [LOG] Unsupported App Detected: '$current_app'"
+             echo "🚫  Unsupported App: '$current_app'"
              last_log="$current_app"
         fi
 
         echo -ne "\r⏳  Paused. Waiting for safe app...   "
         sleep 1
     done
-    # Clear line if we waited
-    echo -ne "\r                                                                           \r"
 }
 
-# Main Loop
-# Function to simulate typing for a single file
+# Cleanup handler for graceful shutdown
+function cleanup {
+    echo ""
+    echo "🧹 Cleaning up..."
+    if [[ -n "$MONITOR_PID" ]] && kill -0 "$MONITOR_PID" 2>/dev/null; then
+        kill "$MONITOR_PID" 2>/dev/null
+        wait "$MONITOR_PID" 2>/dev/null
+    fi
+    MOUSE_MONITOR_ACTIVE=false
+    exit 0
+}
+
+trap cleanup SIGINT SIGTERM
+
+# Nano doesn't need a workspace opened - files are opened individually
+function open_editor_workspace {
+    echo "📂 Ready to open files in Nano..."
+    echo "   (Each file will open in a new Terminal window)"
+}
+
+
+# Simulate typing for a single file
 function simulate_typing_session {
     local source_file="$1"
+    local is_first_file="$2"
 
-    # Extract extension
     local filename=$(basename "$source_file")
     local extension="${filename##*.}"
     if [[ "$filename" == "$extension" ]]; then extension="txt"; fi
 
-    # Unique target file (with random to prevent collision in fast loops)
     local unique_id="$(date +%s)_$RANDOM"
     local target_file="$SUBPROJECT_PATH/${unique_id}_${filename}"
 
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo "STEP 1: Creating file..."
     touch "$target_file"
-    echo "Opening $target_file ..."
+
+    if [[ ! -f "$target_file" ]]; then
+        echo "❌ ERROR: Failed to create file: $target_file"
+        return 1
+    fi
+    echo "✅ File created: $target_file"
+
+    echo ""
+    echo "STEP 2: Opening in Vim..."
 
     if [[ "$OS_NAME" == "Darwin" ]]; then
-        open "$target_file"
+        # macOS: Open vim in a new Terminal window
+        osascript -e "tell application \"Terminal\" to do script \"vim '$target_file'\"" 2>/dev/null
+        osascript -e 'tell application "Terminal" to activate' 2>/dev/null
     elif [[ "$OS_NAME" == "Linux" ]]; then
-        xdg-open "$target_file" || code "$target_file" || nano "$target_file"
+        # Linux: Open vim in a new terminal (try common terminal emulators)
+        if command -v gnome-terminal &> /dev/null; then
+            gnome-terminal -- vim "$target_file" &
+        elif command -v xterm &> /dev/null; then
+            xterm -e vim "$target_file" &
+        else
+            echo "⚠️  Please open vim manually: vim $target_file"
+        fi
     else
-        start "$target_file" 2>/dev/null || echo "Please open file manually: $target_file"
+        # Windows: Open vim via Git Bash / WSL
+        start bash -c "vim '$target_file'" 2>/dev/null || echo "Please open vim manually: vim $target_file"
     fi
 
-    # Countdown (only short one for subsequent files?)
-    echo "⚠️  Focus editor! (3s)..."
-    sleep 3
+    echo ""
+    echo "STEP 3: Waiting for you to focus Vim..."
+    if [[ "$is_first_file" == "true" ]]; then
+        echo "⏳ Please click on the Terminal/Vim window (5 seconds)..."
+        sleep 5
+    else
+        echo "⏳ Please click on the Terminal/Vim window (3 seconds)..."
+        sleep 3
+    fi
 
-    # Capture mouse (restart monitor for each file to be safe?)
-    local initial_mouse=$(get_mouse_pos)
-    monitor_mouse "$initial_mouse" "$$" &
-    local monitor_pid=$!
+    echo ""
+    echo "STEP 4: Checking if Terminal is focused..."
+    wait_for_safe_focus
 
-    echo "Typing content from $source_file..."
+    echo ""
+    echo "STEP 5: Entering Insert mode and starting to type!"
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
+    # Enter Insert mode in Vim (press 'i')
+    if [[ "$OS_NAME" == "Darwin" ]]; then
+        osascript -e 'tell application "System Events" to keystroke "i"' 2>/dev/null
+    elif [[ "$OS_NAME" == "Linux" ]]; then
+        xdotool type "i"
+    else
+        powershell.exe -Command "
+            Add-Type -AssemblyName System.Windows.Forms
+            [System.Windows.Forms.SendKeys]::SendWait('i')
+        " > /dev/null 2>&1
+    fi
+    sleep 0.3
+
+    # Start mouse monitor if not already active
+    if [[ "$MOUSE_MONITOR_ACTIVE" == "false" ]]; then
+        local initial_mouse=$(get_mouse_pos)
+        monitor_mouse "$initial_mouse" "$$" &
+        MOUSE_MONITOR_PID=$!
+        MOUSE_MONITOR_ACTIVE=true
+    fi
+
+    echo "✍️  Typing content from $source_file..."
+
+
+    local line_count=0
     while IFS= read -r line || [[ -n "$line" ]]; do
-        # Random Thinking Pause
-        if (( RANDOM % 20 == 0 )); then
-            local pause=$(( 30 + RANDOM % 31 ))
+        # Check if we should continue
+        if ! kill -0 $$ 2>/dev/null; then
+            break
+        fi
+
+        line_count=$((line_count + 1))
+
+        # Check if 20 seconds have passed since last save
+        local current_time=$(date +%s)
+        local time_since_save=$((current_time - last_save_time))
+
+        if [[ "$time_since_save" -ge 20 ]]; then
+            save_file
+            last_save_time=$(date +%s)
+        fi
+
+        # Random Thinking Pause every ~20 lines
+        if (( line_count % 20 == 0 )) && (( RANDOM % 3 == 0 )); then
+            local pause=$(( 3 + RANDOM % 8 ))
             echo "🧠  Thinking for ${pause}s..."
             sleep "$pause"
         fi
 
-        # Trim leading whitespace logic
-        local trimmed="${line#"${line%%[![:space:]]*}"}"
+        # Check focus before typing each line
+        wait_for_safe_focus
 
-        echo "Typing: ${trimmed:0:20}..."
-        type_text "$trimmed"
-        sleep 0.2
+        # Show preview of what's being typed (max 60 chars)
+        local preview="${line:0:60}"
+        if [[ ${#line} -gt 60 ]]; then
+            preview="${preview}..."
+        fi
+        echo "⌨️  Line $line_count: $preview"
+
+        # Type the line with original indentation (Vim doesn't auto-indent like VS Code)
+        type_text "$line"
+        sleep 0.1
     done < "$source_file"
 
-    # Cleanup monitor for this file
-    kill "$monitor_pid" 2>/dev/null
-    wait "$monitor_pid" 2>/dev/null
+    # Final save at the end
+    echo "💾 Final save..."
+    save_file
+
+    echo "✅ Completed typing $(basename "$source_file") ($line_count lines)"
+}
+
+# Main Loop - Process cycles
+function main_loop {
+    local FIRST_CYCLE=true
+    local CYCLE_COUNT=0
+
+    while true; do
+        CURRENT_TIME=$(date +%s)
+        ELAPSED=$((CURRENT_TIME - START_TIME))
+        if [[ "$ELAPSED" -ge "$DURATION_SEC" ]]; then
+            echo "⏰  Duration reached. Exiting."
+            cleanup
+            break
+        fi
+
+        CYCLE_COUNT=$((CYCLE_COUNT + 1))
+        echo ""
+        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+        echo "🔄 Starting cycle #$CYCLE_COUNT"
+        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+        # Cleanup and recreate subproject directory
+        if [[ -d "$SUBPROJECT_PATH" ]]; then
+            echo "🗑️  Cleaning old subproject files..."
+            rm -rf "$SUBPROJECT_PATH"
+        fi
+        mkdir -p "$SUBPROJECT_PATH"
+        echo "📁 Created subproject directory: $SUBPROJECT_PATH"
+
+        # Build File List based on whether SOURCE_PATH is file or directory
+        FILES_TO_PROCESS=()
+        if [[ -d "$SOURCE_PATH" ]]; then
+            echo "📁 Processing directory: $SOURCE_PATH"
+            while IFS= read -r -d '' file; do
+                FILES_TO_PROCESS+=("$file")
+            done < <(find "$SOURCE_PATH" -type f ! -path '*/.*' ! -path '*/node_modules/*' -print0)
+        else
+            echo "📄 Processing single file: $SOURCE_PATH"
+            FILES_TO_PROCESS+=("$SOURCE_PATH")
+        fi
+
+        echo "📋 Files to process in this cycle: ${#FILES_TO_PROCESS[@]}"
+
+        local file_index=0
+        local successfully_typed=false
+
+        for file in "${FILES_TO_PROCESS[@]}"; do
+             # Check time limit before each file
+             CURRENT_TIME=$(date +%s)
+             if [[ $((CURRENT_TIME - START_TIME)) -ge "$DURATION_SEC" ]]; then
+                 echo "⏰  Time limit reached during cycle"
+                 break
+             fi
+
+             file_index=$((file_index + 1))
+             echo ""
+             echo "➡️  Processing file $file_index/${#FILES_TO_PROCESS[@]}: $(basename "$file")"
+
+             local is_first_file="false"
+             if [[ "$FIRST_CYCLE" == "true" ]] && [[ "$file_index" -eq 1 ]]; then
+                 is_first_file="true"
+             fi
+
+             # Call typing function and check if it succeeded
+             if simulate_typing_session "$file" "$is_first_file"; then
+                 successfully_typed=true
+                 echo "✅ File processed successfully"
+             else
+                 echo "❌ File processing failed - stopping cycle"
+                 break
+             fi
+
+             # Small delay between files
+             if [[ "$file_index" -lt "${#FILES_TO_PROCESS[@]}" ]]; then
+                 echo "⏸️  Pausing 3 seconds before next file..."
+                 sleep 3
+             fi
+        done
+
+        # Only continue cycling if typing was successful
+        if [[ "$successfully_typed" == "false" ]]; then
+            echo ""
+            echo "❌ ERROR: No files were successfully typed in this cycle!"
+            echo "❌ This usually means:"
+            echo "   1. The typing function encountered an error"
+            echo "   2. VS Code is not properly focused"
+            echo "   3. Permissions are not granted (macOS Accessibility)"
+            echo ""
+            echo "Stopping to prevent infinite loop..."
+            cleanup
+            exit 1
+        fi
+
+        FIRST_CYCLE=false
+
+        echo ""
+        echo "✅ Cycle #$CYCLE_COUNT complete!"
+
+        # Check if we should continue
+        REMAINING=$(( (DURATION_SEC - ($(date +%s) - START_TIME)) / 60 ))
+        if [[ "$REMAINING" -gt 0 ]]; then
+            echo "⏱️  Time remaining: approx $REMAINING minutes"
+            echo "⏸️  Waiting 10 seconds before next cycle..."
+            sleep 10
+        else
+            echo "⏰  No time remaining, ending..."
+            break
+        fi
+    done
+
+    echo ""
+    echo "🎉 GhostWriter session completed!"
+    cleanup
 }
 
 # Main Loop
-while true; do
-    CURRENT_TIME=$(date +%s)
-    ELAPSED=$((CURRENT_TIME - START_TIME))
-    if [[ "$ELAPSED" -ge "$DURATION_SEC" ]]; then
-        echo "Duration reached. Exiting."
-        break
-    fi
-    echo ""
-    echo "--- Starting new cycle ---"
+# Start the script
+echo ""
+echo "🎬 Starting GhostWriter..."
+echo "   Duration: $DURATION_MINUTES minutes"
+echo "   Source: $SOURCE_PATH"
 
-    # One-time cleanup per cycle
-    if [[ -d "$SUBPROJECT_PATH" ]]; then
-        rm -rf "$SUBPROJECT_PATH"
-    fi
-    mkdir -p "$SUBPROJECT_PATH"
+# Get initial mouse position
+INITIAL_MOUSE=$(get_mouse_pos)
+echo "📍 Initial mouse position: $INITIAL_MOUSE"
+echo ""
 
-    # Build File List
-    FILES_TO_PROCESS=()
-    if [[ -d "$SOURCE_PATH" ]]; then
-        while IFS= read -r -d '' file; do
-            FILES_TO_PROCESS+=("$file")
-        done < <(find "$SOURCE_PATH" -type f ! -path '*/.*' -print0)
-    else
-        FILES_TO_PROCESS+=("$SOURCE_PATH")
-    fi
+# Initialize editor (Nano opens files individually, so just print info)
+open_editor_workspace
 
-    echo "Files to process in this cycle: ${#FILES_TO_PROCESS[@]}"
-
-    for file in "${FILES_TO_PROCESS[@]}"; do
-         # Check duration again inside file loop
-         CURRENT_TIME=$(date +%s)
-         if [[ $((CURRENT_TIME - START_TIME)) -ge "$DURATION_SEC" ]]; then break; fi
-
-         simulate_typing_session "$file"
-         sleep 1
-    done
-
-    echo "Cycle complete. Waiting before restart..."
-    sleep 2
-
-    REMAINING=$(( (DURATION_SEC - (date +%s - START_TIME)) / 60 ))
-    echo "Time remaining: approx $REMAINING minutes."
-done
+# Run the main loop
+main_loop

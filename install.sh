@@ -37,29 +37,136 @@ fi
 # Download Script
 echo "Downloading..."
 if command -v curl &> /dev/null; then
-    $USE_SUDO curl -fsSL "$DOWNLOAD_URL" -o "$INSTALL_DIR/$SCRIPT_NAME"
+    curl -fsSL "$DOWNLOAD_URL" -o "$INSTALL_DIR/$SCRIPT_NAME"
 elif command -v wget &> /dev/null; then
-    $USE_SUDO wget -qO "$INSTALL_DIR/$SCRIPT_NAME" "$DOWNLOAD_URL"
+    wget -qO "$INSTALL_DIR/$SCRIPT_NAME" "$DOWNLOAD_URL"
 else
     echo "❌  Error: Neither curl nor wget found."
     exit 1
 fi
 
-# Make Executable
-$USE_SUDO chmod +x "$INSTALL_DIR/$SCRIPT_NAME"
+# Check download success
+if [[ ! -f "$INSTALL_DIR/$SCRIPT_NAME" ]]; then
+    echo "❌  Error: Failed to download script."
+    exit 1
+fi
 
-# Install Dependencies (Linux only)
-if [[ "$OS_NAME" == "Linux" ]]; then
-    if ! command -v xdotool &> /dev/null; then
-        echo "Installing xdotool dependency..."
-        if command -v apt-get &> /dev/null; then
-            $USE_SUDO apt-get update && $USE_SUDO apt-get install -y xdotool
-        elif command -v dnf &> /dev/null; then
-            $USE_SUDO dnf install -y xdotool
-        elif command -v pacman &> /dev/null; then
-            $USE_SUDO pacman -S --noconfirm xdotool
+# Make Executable
+chmod +x "$INSTALL_DIR/$SCRIPT_NAME"
+
+# Install Dependencies
+echo ""
+echo "📦  Checking and installing dependencies..."
+
+# macOS Dependencies
+if [[ "$OS_NAME" == "Darwin" ]]; then
+    # Check Python3 (needed for mouse position detection)
+    if ! command -v python3 &> /dev/null; then
+        echo "⚠️  Python3 not found. Attempting to install via Homebrew..."
+
+        # Check if Homebrew is installed
+        if ! command -v brew &> /dev/null; then
+            echo "Installing Homebrew first..."
+            /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
         fi
+
+        if command -v brew &> /dev/null; then
+            brew install python3
+            echo "✅  Python3 installed successfully."
+        else
+            echo "❌  Could not install Python3. Please install it manually."
+            echo "    Visit: https://www.python.org/downloads/"
+        fi
+    else
+        echo "✅  Python3 is already installed."
     fi
+
+    # Check osascript (should be built-in)
+    if ! command -v osascript &> /dev/null; then
+        echo "❌  Error: osascript not found (unexpected on macOS)."
+    else
+        echo "✅  osascript found."
+    fi
+
+# Linux Dependencies
+elif [[ "$OS_NAME" == "Linux" ]]; then
+    # Install xdotool
+    if ! command -v xdotool &> /dev/null; then
+        echo "⚠️  'xdotool' not found. Attempting to install..."
+
+        # Detect package manager and install
+        if command -v apt-get &> /dev/null; then
+            echo "Using apt-get..."
+            sudo apt-get update && sudo apt-get install -y xdotool
+        elif command -v dnf &> /dev/null; then
+            echo "Using dnf..."
+            sudo dnf install -y xdotool
+        elif command -v pacman &> /dev/null; then
+            echo "Using pacman..."
+            sudo pacman -S --noconfirm xdotool
+        elif command -v yum &> /dev/null; then
+            echo "Using yum..."
+            sudo yum install -y xdotool
+        elif command -v zypper &> /dev/null; then
+            echo "Using zypper..."
+            sudo zypper install -y xdotool
+        else
+            echo "❌  Could not detect package manager."
+            echo "    Please install 'xdotool' manually:"
+            echo "    - Debian/Ubuntu: sudo apt-get install xdotool"
+            echo "    - Fedora: sudo dnf install xdotool"
+            echo "    - Arch: sudo pacman -S xdotool"
+            exit 1
+        fi
+
+        # Verify installation
+        if command -v xdotool &> /dev/null; then
+            echo "✅  'xdotool' installed successfully."
+        else
+            echo "❌  Failed to install 'xdotool'."
+            exit 1
+        fi
+    else
+        echo "✅  'xdotool' is already installed."
+    fi
+
+# Windows Dependencies
+else
+    # Check PowerShell
+    if ! command -v powershell.exe &> /dev/null; then
+        echo "❌  Error: PowerShell not found."
+        echo "    This script requires PowerShell for Windows."
+        exit 1
+    else
+        echo "✅  PowerShell found."
+    fi
+fi
+
+# Check VS Code (all platforms)
+echo ""
+echo "🔍  Checking VS Code..."
+if ! command -v code &> /dev/null; then
+    echo "⚠️  VS Code command 'code' not found in PATH."
+    echo ""
+    echo "    Please install VS Code and add 'code' to your PATH:"
+    if [[ "$OS_NAME" == "Darwin" ]]; then
+        echo "    1. Install VS Code from: https://code.visualstudio.com/"
+        echo "    2. Open VS Code"
+        echo "    3. Press Cmd+Shift+P"
+        echo "    4. Type: 'Shell Command: Install code command in PATH'"
+    elif [[ "$OS_NAME" == "Linux" ]]; then
+        echo "    1. Install VS Code from: https://code.visualstudio.com/"
+        echo "    2. The 'code' command should be automatically added to PATH"
+        echo "    3. If not, add it manually or reinstall VS Code"
+    else
+        echo "    1. Install VS Code from: https://code.visualstudio.com/"
+        echo "    2. During installation, check 'Add to PATH'"
+        echo "    3. Or add VS Code's bin folder to your PATH manually"
+    fi
+    echo ""
+    echo "    GhostWriter requires VS Code to function."
+else
+    echo "✅  VS Code 'code' command found."
 fi
 
 echo ""
@@ -73,16 +180,48 @@ if [[ ":$PATH:" != *":$INSTALL_DIR:"* ]]; then
     echo "    To run '$SCRIPT_NAME' from anywhere, add it to your PATH:"
     echo ""
     if [[ "$OS_NAME" == "Darwin" ]] || [[ "$OS_NAME" == "Linux" ]]; then
-        echo "    Run this command (or add to ~/.bashrc or ~/.zshrc):"
-        echo "    export PATH=\"\$PATH:$INSTALL_DIR\""
+        SHELL_CONFIG=""
+        if [[ -f "$HOME/.zshrc" ]]; then
+            SHELL_CONFIG="$HOME/.zshrc"
+        elif [[ -f "$HOME/.bashrc" ]]; then
+            SHELL_CONFIG="$HOME/.bashrc"
+        elif [[ -f "$HOME/.bash_profile" ]]; then
+            SHELL_CONFIG="$HOME/.bash_profile"
+        fi
+
+        if [[ -n "$SHELL_CONFIG" ]]; then
+            echo "    Run this command to add to your shell config:"
+            echo "    echo 'export PATH=\"\$PATH:$INSTALL_DIR\"' >> $SHELL_CONFIG"
+            echo "    source $SHELL_CONFIG"
+        else
+            echo "    Add this to your shell config file (~/.bashrc or ~/.zshrc):"
+            echo "    export PATH=\"\$PATH:$INSTALL_DIR\""
+        fi
     else
         echo "    Add '$INSTALL_DIR' to your User Environment Variables (Path)."
     fi
     echo ""
 fi
 
+# macOS Accessibility Permissions Notice
+if [[ "$OS_NAME" == "Darwin" ]]; then
+    echo ""
+    echo "📝  IMPORTANT: macOS Accessibility Permissions"
+    echo "    When you first run $SCRIPT_NAME, you may need to grant permissions:"
+    echo "    1. Go to System Settings > Privacy & Security > Accessibility"
+    echo "    2. Allow your Terminal app to control your computer"
+    echo "    3. This is required for keystroke simulation"
+    echo ""
+fi
+
 # Final usage instructions
 echo "--------------------------------------------------------"
-echo "🎉  You can now use '$SCRIPT_NAME' anywhere!"
-echo "    Example: $SCRIPT_NAME --duration 10"
+echo "🎉  You can now use '$SCRIPT_NAME'!"
+echo ""
+echo "    Examples:"
+echo "    $SCRIPT_NAME --duration 10"
+echo "    $SCRIPT_NAME --source src/main.ts"
+echo "    $SCRIPT_NAME --source src/ --duration 60"
+echo ""
+echo "    For help: $SCRIPT_NAME --help"
 echo "--------------------------------------------------------"
