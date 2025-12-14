@@ -379,9 +379,27 @@ function type_char {
     local char="$1"
 
     if [[ "$OS_NAME" == "Darwin" ]]; then
-        osascript -e "tell application \"System Events\" to keystroke \"$char\"" 2>/dev/null
+        # Escape special characters for AppleScript
+        case "$char" in
+            '"')
+                # Double quote needs special handling
+                osascript -e 'tell application "System Events" to keystroke "\""' 2>/dev/null
+                ;;
+            '\\')
+                # Backslash
+                osascript -e 'tell application "System Events" to keystroke "\\"' 2>/dev/null
+                ;;
+            '$')
+                # Dollar sign - use key code 4 with shift for $
+                osascript -e 'tell application "System Events" to keystroke "$"' 2>/dev/null
+                ;;
+            *)
+                # All other characters
+                osascript -e "tell application \"System Events\" to keystroke \"$char\"" 2>/dev/null
+                ;;
+        esac
     elif [[ "$OS_NAME" == "Linux" ]]; then
-        xdotool type --delay 0 "$char"
+        xdotool type --delay 0 -- "$char"
     else
         local escaped_char="${char//\'/\'\'}"
         powershell.exe -Command "
@@ -722,13 +740,6 @@ function simulate_typing_session {
 
         # Check focus before typing each line
         wait_for_safe_focus
-
-        # Show preview of what's being typed (max 60 chars)
-        local preview="${line:0:60}"
-        if [[ ${#line} -gt 60 ]]; then
-            preview="${preview}..."
-        fi
-        echo "⌨️  Line $line_count: $preview"
 
         # Type the line with original indentation (Vim doesn't auto-indent like VS Code)
         type_text "$line"
