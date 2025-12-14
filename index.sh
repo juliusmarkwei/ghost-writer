@@ -623,21 +623,34 @@ function simulate_typing_session {
     echo "STEP 2: Opening in Vim..."
 
     if [[ "$OS_NAME" == "Darwin" ]]; then
-        # macOS: Open vim in a new Terminal window
+        # macOS: Open vim in a new Terminal window and maximize it
         osascript -e "tell application \"Terminal\" to do script \"vim '$target_file'\"" 2>/dev/null
         osascript -e 'tell application "Terminal" to activate' 2>/dev/null
+        sleep 0.5
+        # Maximize the Terminal window (enter full screen)
+        osascript -e '
+            tell application "System Events"
+                tell process "Terminal"
+                    set frontWindow to first window
+                    set position of frontWindow to {0, 0}
+                    set size of frontWindow to {1920, 1080}
+                end tell
+            end tell
+        ' 2>/dev/null
+        # Alternative: Enter actual full screen mode (Ctrl+Cmd+F)
+        osascript -e 'tell application "System Events" to key code 3 using {control down, command down}' 2>/dev/null
     elif [[ "$OS_NAME" == "Linux" ]]; then
-        # Linux: Open vim in a new terminal (try common terminal emulators)
+        # Linux: Open vim in a new terminal (try common terminal emulators) with maximize
         if command -v gnome-terminal &> /dev/null; then
-            gnome-terminal -- vim "$target_file" &
+            gnome-terminal --maximize -- vim "$target_file" &
         elif command -v xterm &> /dev/null; then
-            xterm -e vim "$target_file" &
+            xterm -maximized -e vim "$target_file" &
         else
             echo "⚠️  Please open vim manually: vim $target_file"
         fi
     else
-        # Windows: Open vim via Git Bash / WSL
-        start bash -c "vim '$target_file'" 2>/dev/null || echo "Please open vim manually: vim $target_file"
+        # Windows: Open vim via Git Bash / WSL (maximized)
+        start /max bash -c "vim '$target_file'" 2>/dev/null || echo "Please open vim manually: vim $target_file"
     fi
 
     echo ""
