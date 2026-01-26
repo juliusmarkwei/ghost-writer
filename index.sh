@@ -278,7 +278,7 @@ else
     FOUND_DEFAULT=false
 
     # Common directories to check (in priority order)
-    COMMON_DIRS=("src" "app" "lib" "packages" "server" "client" "api" "")
+    COMMON_DIRS=("src" "app" "apps" "lib" "libs" "packages" "server" "client" "api" "")
 
     # Common entry point filenames (in priority order)
     COMMON_FILES=("index.ts" "index.js" "main.ts" "main.js" "app.ts" "app.js" "server.ts" "server.js")
