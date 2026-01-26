@@ -1,32 +1,50 @@
 # GhostWriter
 
-A cross-platform CLI tool that simulates a developer typing code in real-time. It reads source files from your project and "types" them into Vim (terminal-based editor), mimicking human typing speeds and natural coding habits—perfect for demonstrations, tutorials, or just having fun watching code write itself.
+A cross-platform CLI tool that simulates a developer typing code in real-time with sophisticated human-like behavior. It reads source files from your project and "types" them into VS Code, complete with context-aware typing speeds, intelligent pauses, and even occasional typos—perfect for demonstrations, tutorials, or just having fun watching code write itself naturally.
 
 ## ✨ Features
 
--   **Human-like Typing**: Variable typing speeds (100-300ms delays) to mimic realistic behavior
--   **Realistic Pauses**: Occasional "thinking" pauses (5-15 seconds) to simulate developer workflow
--   **Smart Focus Management**: Automatically detects and maintains focus on safe editor applications
--   **Mouse Movement Detection**: Instantly stops when you move your mouse, giving you immediate control
+### 🎨 Human-Like Typing
+
+-   **Context-Aware Speed**: Automatically adjusts typing speed based on character type
+    -   Fast on whitespace (2x faster)
+    -   Slower on special characters like brackets and semicolons (+30-50ms)
+    -   Natural variation with random jitter (±20ms per character)
+-   **Intelligent Pauses**: Smart pause system that mimics real developer behavior
+    -   Long pauses (1.5-4s) before major constructs (functions, classes, imports)
+    -   Medium pauses (0.8-2s) after block endings
+    -   Short pauses (0.3-0.8s) after blank lines
+    -   Micro-pauses (0.1-0.3s) for natural rhythm
+-   **Typo Simulation**: Occasional typos (~5% chance) with realistic backspace and correction
+    -   Types 2-4 characters, realizes "mistake", pauses briefly
+    -   Backtracks and retypes correctly
+    -   Never breaks code structure (only in safe zones)
+-   **VS Code Auto-Complete Handling**: Seamlessly manages VS Code's bracket/quote auto-completion
+
+### 🛡️ Safety & Control
+
+-   **Mouse Movement Detection**: Instantly stops when you move your mouse
+-   **Smart Focus Management**: Only types into VS Code, never in other applications
+-   **Graceful Cleanup**: Proper signal handling, no zombie processes
+
+### 🚀 Workflow Features
+
 -   **Directory & File Support**: Process entire directories or individual files
--   **Automated Workflow**: Creates temporary subprojects, opens files in Vim, and starts typing automatically
--   **Looping Mode**: Runs continuously for a specified duration (default 30 minutes), recreating sessions after each cycle
--   **Language Agnostic**: Dynamically detects file extensions and creates matching simulation files
--   **Built-in Test Source**: Includes comprehensive TypeScript test content when no source is specified
--   **Robust Cleanup**: Ensures fresh files for every cycle with proper signal handling
--   **Cross-Platform Support**:
-    -   **macOS**: Uses `osascript` (built-in)
-    -   **Linux**: Uses `xdotool` (auto-installed)
-    -   **Windows**: Uses PowerShell (built-in)
+-   **Automated Workflow**: Opens files in VS Code and starts typing automatically
+-   **Looping Mode**: Runs continuously for a specified duration (default 30 minutes)
+-   **Language Agnostic**: Works with any programming language or text file
+-   **Built-in Test Source**: Comprehensive TypeScript test content included
+-   **Cross-Platform Support**: macOS, Linux, and Windows
 
 ## 📋 Prerequisites
 
 ### All Platforms
 
--   **Vim**: Must be installed (usually pre-installed on macOS and Linux)
-    -   macOS: `brew install vim` (if not present)
-    -   Linux: `sudo apt-get install vim` (or equivalent)
-    -   Windows: Available via Git Bash or WSL
+-   **VS Code**: Must be installed with the `code` command in your PATH
+    -   Download from [https://code.visualstudio.com/](https://code.visualstudio.com/)
+    -   **macOS**: After installing VS Code, open it and press `Cmd+Shift+P` → "Shell Command: Install 'code' command in PATH"
+    -   **Linux**: The `code` command is usually added to PATH automatically during installation
+    -   **Windows**: Check "Add to PATH" during installation
 
 ### Platform-Specific
 
@@ -109,8 +127,12 @@ ghost-writer
 
 This will:
 
-1. Search for default source files (`src/app/main/index.ts`, `src/index.ts`, or `index.ts`)
-2. If none found, use the built-in test source (comprehensive TypeScript example)
+1. Auto-detect source files using intelligent search:
+   - **Nested patterns**: `src/app/main/`, `src/app/`, `src/main/`, etc.
+   - **Common directories**: `src/`, `app/`, `lib/`, `packages/`, `server/`, `client/`, `api/`
+   - **Entry points**: `index.ts`, `main.ts`, `app.ts`, `server.ts` (plus `.js` variants)
+   - **Fallback**: If no entry point found, uses first directory with code files
+2. If nothing found, use the built-in test source (comprehensive TypeScript example)
 3. Run for 30 minutes with realistic typing speeds
 4. Create a `simulation-subproject` folder for output files
 
@@ -178,20 +200,24 @@ ghost-writer --source src/components/ --duration 120 --min-delay 80 --max-delay 
 ## 🎯 How It Works
 
 1. **Project Detection**: Automatically finds your project root by looking for `package.json`
-2. **Source Resolution**:
+2. **Smart Source Resolution**:
     - If `--source` specified: Uses that exact file or directory
-    - If no `--source`: Searches for default files in order: `src/app/main/index.ts` → `src/index.ts` → `index.ts`
-    - If none found: Uses built-in comprehensive test source
+    - If no `--source`: Intelligently searches for source files:
+      - Checks nested patterns: `src/app/main/`, `src/app/`, `app/main/`, etc.
+      - Looks in common directories: `src/`, `app/`, `lib/`, `packages/`, `server/`, `client/`, `api/`
+      - Searches for entry points: `index.ts`, `main.ts`, `app.ts`, `server.ts` (+ `.js` variants)
+      - Falls back to first directory with `.ts`, `.js`, `.tsx`, or `.jsx` files
+    - If nothing found: Uses built-in comprehensive test source
 3. **File Processing**:
     - **Single file**: Types just that file
     - **Directory**: Processes all files recursively (excluding hidden files and `node_modules`)
-4. **Typing Simulation**:
-    - Opens each file in Vim (in a new Terminal window)
-    - Enters Insert mode and types line-by-line with random delays
-    - Preserves original indentation
-    - Types line-by-line with random delays between keystrokes
-    - Occasional "thinking" pauses (every ~20 lines)
-    - Monitors mouse position and stops if movement detected
+4. **Human-Like Typing Simulation**:
+    - Opens each file in VS Code (reuses existing window with `code -r`)
+    - **Context-aware typing**: Faster on whitespace, slower on special characters
+    - **Smart pauses**: Automatically pauses before functions, classes, and other major constructs
+    - **Typo simulation**: Occasional backspace/correction (~5% of characters)
+    - **Auto-complete handling**: Seamlessly removes VS Code's auto-completed brackets/quotes
+    - **Safety monitoring**: Continuously monitors mouse position and stops if movement detected
 5. **Looping**: After completing all files, waits briefly and restarts until duration expires
 
 ## 🛡️ Safety Features
@@ -209,10 +235,10 @@ ghost-writer --source src/components/ --duration 120 --min-delay 80 --max-delay 
 
 **Prevents typing in wrong applications**:
 
--   Only types into safe applications (Terminal, Vim, iTerm, etc.)
+-   Only types into VS Code and other safe applications
 -   Automatically refocuses your editor if focus is lost
 -   Pauses if an unsafe application is active
--   Whitelist includes: Terminal, iTerm, Warp, Alacritty, Hyper, kitty, vim, nvim, and other terminal emulators
+-   Whitelist includes: VS Code, Cursor, Windsurf, Terminal, iTerm, Warp, and other code editors
 
 ### Graceful Cleanup
 
@@ -252,23 +278,31 @@ sudo pacman -S xdotool
 sudo zypper install xdotool
 ```
 
-### Vim: `vim: command not found`
+### VS Code: `code: command not found`
 
 **Solution:**
 
+The `code` command must be in your PATH. Here's how to add it:
+
 **macOS:**
 
-```bash
-brew install vim
-```
+1. Open VS Code
+2. Press `Cmd+Shift+P` to open Command Palette
+3. Type: "Shell Command: Install 'code' command in PATH"
+4. Select it and restart your terminal
 
 **Linux:**
 
 ```bash
-sudo apt-get install vim  # Debian/Ubuntu
-sudo dnf install vim      # Fedora
-sudo pacman -S vim        # Arch
+# Usually added automatically during VS Code installation
+# If not, reinstall VS Code or add it to PATH manually
+export PATH="$PATH:/usr/share/code/bin"
 ```
+
+**Windows:**
+
+-   During VS Code installation, check "Add to PATH"
+-   Or add VS Code's bin folder to your system PATH manually
 
 ### Windows: Script won't run
 
@@ -308,7 +342,8 @@ ghost-writer --min-delay 300 --max-delay 600
 
 1. **Mouse moved**: Even slight touchpad touches trigger termination (this is intentional!)
 2. **Source file not found**: Check the error message and verify the path
-3. **Vim not installed**: The script needs Vim to be installed
+3. **VS Code not installed**: The script requires VS Code with the `code` command in PATH
+4. **VS Code not focused**: Make sure VS Code window is active when the script starts
 
 ### Permission errors during installation
 

@@ -230,18 +230,22 @@ function check_dependencies {
         echo "✅  'osascript' found."
     fi
 
-    # Vim Requirement (All Platforms)
-    if ! command -v vim &> /dev/null; then
-        echo "❌  Error: 'vim' editor not found."
-        echo "    Please install vim:"
+    # VS Code Requirement (All Platforms)
+    if ! command -v code &> /dev/null; then
+        echo "❌  Error: 'code' command not found."
+        echo "    Please install VS Code and ensure the 'code' command is in your PATH:"
         if [[ "$OS_NAME" == "Darwin" ]]; then
-            echo "    brew install vim"
+            echo "    1. Download from https://code.visualstudio.com/"
+            echo "    2. Open VS Code and run: Cmd+Shift+P → 'Shell Command: Install code command in PATH'"
         elif [[ "$OS_NAME" == "Linux" ]]; then
-            echo "    sudo apt-get install vim  (or equivalent for your distro)"
+            echo "    1. Download from https://code.visualstudio.com/"
+            echo "    2. Or install via snap: sudo snap install --classic code"
+        else
+            echo "    Download from https://code.visualstudio.com/"
         fi
         exit 1
     fi
-    echo "✅  'vim' found."
+    echo "✅  'code' command found."
 }
 
 check_dependencies
@@ -269,20 +273,67 @@ if [[ "$USER_PROVIDED_SOURCE" == "true" ]]; then
         echo "✅ Using user-specified file: $SOURCE_PATH"
     fi
 else
-    # No source specified - try defaults first, then use embedded content
+    # No source specified - try to auto-detect using common patterns
     SOURCE_PATH=""
     FOUND_DEFAULT=false
 
-    # Try default paths
-    if [[ -f "$ROOT_PATH/src/app/main/index.ts" ]]; then
-         SOURCE_PATH="$ROOT_PATH/src/app/main/index.ts"
-         FOUND_DEFAULT=true
-    elif [[ -f "$ROOT_PATH/src/index.ts" ]]; then
-         SOURCE_PATH="$ROOT_PATH/src/index.ts"
-         FOUND_DEFAULT=true
-    elif [[ -f "$ROOT_PATH/index.ts" ]]; then
-         SOURCE_PATH="$ROOT_PATH/index.ts"
-         FOUND_DEFAULT=true
+    # Common directories to check (in priority order)
+    COMMON_DIRS=("src" "app" "lib" "packages" "server" "client" "api" "")
+
+    # Common entry point filenames (in priority order)
+    COMMON_FILES=("index.ts" "index.js" "main.ts" "main.js" "app.ts" "app.js" "server.ts" "server.js")
+
+    # Also check nested patterns
+    NESTED_PATTERNS=("src/app/main" "src/app" "src/main" "app/main" "src/server" "app/server")
+
+    echo "🔍 Auto-detecting source files..."
+
+    # First, try nested patterns with common files
+    for pattern in "${NESTED_PATTERNS[@]}"; do
+        for file in "${COMMON_FILES[@]}"; do
+            if [[ -f "$ROOT_PATH/$pattern/$file" ]]; then
+                SOURCE_PATH="$ROOT_PATH/$pattern/$file"
+                FOUND_DEFAULT=true
+                break 2
+            fi
+        done
+    done
+
+    # If not found, try common directories with common files
+    if [[ "$FOUND_DEFAULT" == "false" ]]; then
+        for dir in "${COMMON_DIRS[@]}"; do
+            for file in "${COMMON_FILES[@]}"; do
+                if [[ -n "$dir" ]]; then
+                    test_path="$ROOT_PATH/$dir/$file"
+                else
+                    test_path="$ROOT_PATH/$file"
+                fi
+
+                if [[ -f "$test_path" ]]; then
+                    SOURCE_PATH="$test_path"
+                    FOUND_DEFAULT=true
+                    break 2
+                fi
+            done
+        done
+    fi
+
+    # If still not found, try to use first directory with code files
+    if [[ "$FOUND_DEFAULT" == "false" ]]; then
+        for dir in "${COMMON_DIRS[@]}"; do
+            if [[ -z "$dir" ]]; then continue; fi
+
+            test_dir="$ROOT_PATH/$dir"
+            if [[ -d "$test_dir" ]]; then
+                # Check if directory has any code files
+                if find "$test_dir" -maxdepth 3 -type f \( -name "*.ts" -o -name "*.js" -o -name "*.tsx" -o -name "*.jsx" \) -print -quit | grep -q .; then
+                    SOURCE_PATH="$test_dir"
+                    FOUND_DEFAULT=true
+                    echo "✅ Found code files in: $dir/"
+                    break
+                fi
+            fi
+        done
     fi
 
     if [[ "$FOUND_DEFAULT" == "false" ]]; then
@@ -300,49 +351,24 @@ fi
 SUBPROJECT_PATH="$ROOT_PATH/$SUBPROJECT_NAME"
 KNOWN_EDITOR_APP=""
 
-# Function to save the current file in Vim
+# Function to save the current file in VS Code
 function save_file {
-    echo "💾 Saving file (:w)..."
+    echo "💾 Saving file (Cmd/Ctrl+S)..."
 
     if [[ "$OS_NAME" == "Darwin" ]]; then
-        # macOS: Escape to normal mode, then :w to save
-        osascript -e 'tell application "System Events" to key code 53' 2>/dev/null  # Escape
-        sleep 0.2
-        osascript -e 'tell application "System Events" to keystroke ":w"' 2>/dev/null
-        sleep 0.1
-        osascript -e 'tell application "System Events" to key code 36' 2>/dev/null  # Enter
+        # macOS: Cmd+S
+        osascript -e 'tell application "System Events" to keystroke "s" using command down' 2>/dev/null
     elif [[ "$OS_NAME" == "Linux" ]]; then
-        # Linux: Escape, :w, Enter
-        xdotool key Escape
-        sleep 0.2
-        xdotool type ":w"
-        sleep 0.1
-        xdotool key Return
+        # Linux: Ctrl+S
+        xdotool key ctrl+s
     else
-        # Windows: Escape, :w, Enter
+        # Windows: Ctrl+S
         powershell.exe -Command "
             Add-Type -AssemblyName System.Windows.Forms
-            [System.Windows.Forms.SendKeys]::SendWait('{ESC}')
-            Start-Sleep -Milliseconds 200
-            [System.Windows.Forms.SendKeys]::SendWait(':w')
-            Start-Sleep -Milliseconds 100
-            [System.Windows.Forms.SendKeys]::SendWait('{ENTER}')
+            [System.Windows.Forms.SendKeys]::SendWait('^s')
         " > /dev/null 2>&1
     fi
 
-    sleep 0.3
-
-    # Return to Insert mode for continued typing
-    if [[ "$OS_NAME" == "Darwin" ]]; then
-        osascript -e 'tell application "System Events" to keystroke "i"' 2>/dev/null
-    elif [[ "$OS_NAME" == "Linux" ]]; then
-        xdotool type "i"
-    else
-        powershell.exe -Command "
-            Add-Type -AssemblyName System.Windows.Forms
-            [System.Windows.Forms.SendKeys]::SendWait('i')
-        " > /dev/null 2>&1
-    fi
     sleep 0.2
 }
 
@@ -372,6 +398,24 @@ function send_forward_delete {
             }
         " > /dev/null 2>&1
     fi
+}
+
+# Function to handle VS Code character typing with auto-complete detection
+function handle_vscode_char {
+    local char="$1"
+
+    # Type the character
+    type_char "$char"
+
+    # Check if this is an opening bracket/quote that triggers auto-complete
+    case "$char" in
+        '('|'{'|'['|'"'|"'"|\`)
+            # Sleep briefly to let VS Code add the closing character
+            sleep 0.05
+            # Delete the auto-completed closing character
+            send_forward_delete 1
+            ;;
+    esac
 }
 
 # Function to type a single character
@@ -410,22 +454,207 @@ function type_char {
 }
 
 
-# Function to type text character by character
+# Context-aware typing delay calculator
+function calculate_typing_delay {
+    local char="$1"
+    local line="$2"
+    local position="$3"
+
+    local base_min=$MIN_DELAY_MS
+    local base_max=$MAX_DELAY_MS
+    local base_range=$((base_max - base_min))
+
+    # Calculate base delay with random jitter
+    local delay=$((base_min + RANDOM % (base_range + 1)))
+
+    # Adjust based on character type
+    if [[ "$char" =~ ^[[:space:]]$ ]]; then
+        # Whitespace: 2x faster
+        delay=$((delay / 2))
+    elif [[ "$char" =~ [\(\)\{\}\[\]\;\:\"\'\`\$] ]]; then
+        # Special chars: slower
+        local slowdown=$((30 + RANDOM % 21))  # +30-50ms
+        delay=$((delay + slowdown))
+    fi
+
+    # Add complexity penalty for long lines
+    local line_len=${#line}
+    if [[ $line_len -gt 80 ]]; then
+        delay=$((delay + 50))
+    fi
+
+    # Random jitter: ±20ms
+    local jitter=$((RANDOM % 41 - 20))
+    delay=$((delay + jitter))
+
+    # Ensure positive
+    if [[ $delay -lt 10 ]]; then
+        delay=10
+    fi
+
+    echo "$delay"
+}
+
+# Detect if we should pause before this line
+function should_pause_before_line {
+    local line="$1"
+    local prev_line="$2"
+    local line_number="$3"
+
+    # Skip first line
+    if [[ $line_number -eq 1 ]]; then
+        echo "none"
+        return
+    fi
+
+    # Long pause: before major constructs
+    if [[ "$line" =~ ^[[:space:]]*(function|class|interface|type|const|let|var|import|export|async|//|/\*|\*/|\}[[:space:]]*$) ]]; then
+        echo "long"
+        return
+    fi
+
+    # Medium pause: after block endings
+    if [[ "$prev_line" =~ [\}\;][[:space:]]*$ ]] && [[ -z "${line// /}" ]]; then
+        echo "medium"
+        return
+    fi
+
+    # Short pause: after blank lines
+    if [[ -z "${prev_line// /}" ]] && [[ -n "${line// /}" ]]; then
+        echo "short"
+        return
+    fi
+
+    # Micro pause: random 20% chance
+    if (( RANDOM % 5 == 0 )); then
+        echo "micro"
+        return
+    fi
+
+    echo "none"
+}
+
+# Execute a pause with appropriate duration
+function execute_pause {
+    local pause_type="$1"
+    local line="$2"
+
+    local duration=0
+
+    case "$pause_type" in
+        long)
+            duration=$(awk "BEGIN {print (1.5 + rand() * 2.5)}")  # 1.5-4s
+            ;;
+        medium)
+            duration=$(awk "BEGIN {print (0.8 + rand() * 1.2)}")  # 0.8-2s
+            ;;
+        short)
+            duration=$(awk "BEGIN {print (0.3 + rand() * 0.5)}")  # 0.3-0.8s
+            ;;
+        micro)
+            duration=$(awk "BEGIN {print (0.1 + rand() * 0.2)}")  # 0.1-0.3s
+            ;;
+    esac
+
+    if [[ "$pause_type" != "micro" ]]; then
+        local preview="${line:0:50}"
+        if [[ ${#line} -gt 50 ]]; then
+            preview="${preview}..."
+        fi
+        echo "🧠  Pausing (${pause_type}): ${duration}s before '${preview}'"
+    fi
+
+    sleep "$duration"
+}
+
+# Simulate a typo with backspace and correction
+function simulate_typo {
+    local line="$1"
+    local position="$2"
+
+    local line_len=${#line}
+
+    # Skip typos near boundaries or on whitespace
+    if [[ $position -lt 3 ]] || [[ $position -gt $((line_len - 3)) ]]; then
+        return
+    fi
+
+    local char="${line:$position:1}"
+    if [[ "$char" =~ ^[[:space:]]$ ]]; then
+        return
+    fi
+
+    # 5% chance of typo
+    if (( RANDOM % 20 != 0 )); then
+        return
+    fi
+
+    # Determine how many chars to delete (2-4)
+    local delete_count=$((2 + RANDOM % 3))
+
+    echo "⌫  Simulating typo (backspace $delete_count chars)..."
+
+    # Backspace
+    for (( i=0; i<delete_count; i++ )); do
+        if [[ "$OS_NAME" == "Darwin" ]]; then
+            osascript -e 'tell application "System Events" to key code 51' 2>/dev/null  # Backspace
+        elif [[ "$OS_NAME" == "Linux" ]]; then
+            xdotool key BackSpace
+        else
+            powershell.exe -Command "
+                Add-Type -AssemblyName System.Windows.Forms
+                [System.Windows.Forms.SendKeys]::SendWait('{BACKSPACE}')
+            " > /dev/null 2>&1
+        fi
+        sleep 0.08
+    done
+
+    # Pause to "realize" mistake
+    local pause=$(awk "BEGIN {print (0.2 + rand() * 0.3)}")  # 0.2-0.5s
+    sleep "$pause"
+
+    # Retype the deleted characters
+    local start_pos=$((position - delete_count + 1))
+    for (( i=0; i<delete_count; i++ )); do
+        local retype_char="${line:$((start_pos + i)):1}"
+        type_char "$retype_char"
+        sleep 0.15
+    done
+}
+
+# Function to type text character by character with human-like behavior
 function type_text {
-    local text="$1"
-    local len=${#text}
+    local line="$1"
+    local prev_line="$2"
+    local line_number="$3"
+
+    # Check for pause before line
+    local pause_type=$(should_pause_before_line "$line" "$prev_line" "$line_number")
+    if [[ "$pause_type" != "none" ]]; then
+        execute_pause "$pause_type" "$line"
+    fi
+
+    local len=${#line}
 
     # Type character by character
     for (( i=0; i<len; i++ )); do
-        local char="${text:$i:1}"
-        type_char "$char"
-        # Random delay between keystrokes
-        local delay_ms=$(( MIN_DELAY_MS + RANDOM % (MAX_DELAY_MS - MIN_DELAY_MS + 1) ))
+        local char="${line:$i:1}"
+
+        # Use VS Code-aware typing
+        handle_vscode_char "$char"
+
+        # Occasionally simulate typos (not on whitespace)
+        if [[ ! "$char" =~ ^[[:space:]]$ ]]; then
+            simulate_typo "$line" "$i"
+        fi
+
+        # Context-aware delay
+        local delay_ms=$(calculate_typing_delay "$char" "$line" "$i")
         local delay_sec=$(awk "BEGIN {print $delay_ms/1000}")
         sleep "$delay_sec"
     done
 
-    # Press Enter at the end of the line (simple for Nano - no auto-complete to deal with)
+    # Press Enter at the end of the line
     sleep 0.1
     if [[ "$OS_NAME" == "Darwin" ]]; then
         osascript -e 'tell application "System Events" to key code 36' 2>/dev/null
@@ -523,7 +752,7 @@ function get_active_app {
 function is_safe_app {
     local app_name="$1"
     case "$app_name" in
-        *Code*|*VSCode*|*Electron*|*Cursor*|*Windsurf*|*TextEdit*|*Notepad*|*gedit*|*kate*|*vim*|*nvim*|*emacs*|*iTerm*|*Terminal*|*Warp*|*Alacritty*|*Hyper*|*kitty*|*Windows_Generic*)
+        *Code*|*VSCode*|*code*|*vscode*|*Cursor*|*Windsurf*|*Electron*|*iTerm*|*Terminal*|*Warp*|*Alacritty*|*Hyper*|*kitty*|*Windows_Generic*)
             return 0
             ;;
         *)
@@ -608,10 +837,10 @@ function cleanup {
 
 trap cleanup SIGINT SIGTERM
 
-# Nano doesn't need a workspace opened - files are opened individually
+# VS Code files are opened individually with code -r to reuse window
 function open_editor_workspace {
-    echo "📂 Ready to open files in Nano..."
-    echo "   (Each file will open in a new Terminal window)"
+    echo "📂 Ready to open files in VS Code..."
+    echo "   (Files will open in VS Code with window reuse)"
 }
 
 
@@ -638,69 +867,70 @@ function simulate_typing_session {
     echo "✅ File created: $target_file"
 
     echo ""
-    echo "STEP 2: Opening in Vim..."
+    echo "STEP 2: Opening in VS Code..."
 
+    # Open file in VS Code (reuse existing window)
+    code -r "$target_file"
+
+    # Platform-specific window activation and maximization
     if [[ "$OS_NAME" == "Darwin" ]]; then
-        # macOS: Open vim in a new Terminal window and maximize it
-        osascript -e "tell application \"Terminal\" to do script \"vim '$target_file'\"" 2>/dev/null
-        osascript -e 'tell application "Terminal" to activate' 2>/dev/null
+        # macOS: Activate and maximize VS Code
+        osascript -e 'tell application "Visual Studio Code" to activate' 2>/dev/null
         sleep 0.5
-        # Maximize the Terminal window (enter full screen)
+        # Maximize window
         osascript -e '
             tell application "System Events"
-                tell process "Terminal"
+                tell process "Visual Studio Code"
                     set frontWindow to first window
                     set position of frontWindow to {0, 0}
-                    set size of frontWindow to {1920, 1080}
+                    try
+                        set size of frontWindow to {1920, 1080}
+                    end try
                 end tell
             end tell
         ' 2>/dev/null
-        # Alternative: Enter actual full screen mode (Ctrl+Cmd+F)
-        osascript -e 'tell application "System Events" to key code 3 using {control down, command down}' 2>/dev/null
     elif [[ "$OS_NAME" == "Linux" ]]; then
-        # Linux: Open vim in a new terminal (try common terminal emulators) with maximize
-        if command -v gnome-terminal &> /dev/null; then
-            gnome-terminal --maximize -- vim "$target_file" &
-        elif command -v xterm &> /dev/null; then
-            xterm -maximized -e vim "$target_file" &
-        else
-            echo "⚠️  Please open vim manually: vim $target_file"
+        # Linux: Activate and maximize VS Code
+        sleep 0.5
+        if command -v wmctrl &> /dev/null; then
+            wmctrl -a "Visual Studio Code" 2>/dev/null
+            wmctrl -r "Visual Studio Code" -b add,maximized_vert,maximized_horz 2>/dev/null
+        elif command -v xdotool &> /dev/null; then
+            sleep 0.3
+            xdotool search --name "Visual Studio Code" windowactivate 2>/dev/null
+            xdotool getactivewindow windowsize 100% 100% 2>/dev/null
         fi
     else
-        # Windows: Open vim via Git Bash / WSL (maximized)
-        start /max bash -c "vim '$target_file'" 2>/dev/null || echo "Please open vim manually: vim $target_file"
+        # Windows: Activate and maximize
+        sleep 0.5
+        powershell.exe -Command "
+            Add-Type -AssemblyName System.Windows.Forms
+            \$hwnd = [System.Diagnostics.Process]::GetProcessesByName('Code') | Select-Object -First 1 -ExpandProperty MainWindowHandle
+            if (\$hwnd) {
+                [void][System.Windows.Forms.SendKeys]::SendWait('%{TAB}')
+                Start-Sleep -Milliseconds 300
+                [void][System.Windows.Forms.SendKeys]::SendWait('#{UP}')
+            }
+        " 2>/dev/null
     fi
 
     echo ""
-    echo "STEP 3: Waiting for you to focus Vim..."
+    echo "STEP 3: Waiting for you to focus VS Code..."
     if [[ "$is_first_file" == "true" ]]; then
-        echo "⏳ Please click on the Terminal/Vim window (5 seconds)..."
-        sleep 5
-    else
-        echo "⏳ Please click on the Terminal/Vim window (3 seconds)..."
+        echo "⏳ Please click on the VS Code window (3 seconds)..."
         sleep 3
+    else
+        echo "⏳ Please click on the VS Code window (2 seconds)..."
+        sleep 2
     fi
 
     echo ""
-    echo "STEP 4: Checking if Terminal is focused..."
+    echo "STEP 4: Checking if VS Code is focused..."
     wait_for_safe_focus
 
     echo ""
-    echo "STEP 5: Entering Insert mode and starting to type!"
+    echo "STEP 5: Starting to type!"
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-
-    # Enter Insert mode in Vim (press 'i')
-    if [[ "$OS_NAME" == "Darwin" ]]; then
-        osascript -e 'tell application "System Events" to keystroke "i"' 2>/dev/null
-    elif [[ "$OS_NAME" == "Linux" ]]; then
-        xdotool type "i"
-    else
-        powershell.exe -Command "
-            Add-Type -AssemblyName System.Windows.Forms
-            [System.Windows.Forms.SendKeys]::SendWait('i')
-        " > /dev/null 2>&1
-    fi
-    sleep 0.3
 
     # Start mouse monitor if not already active
     if [[ "$MOUSE_MONITOR_ACTIVE" == "false" ]]; then
@@ -712,8 +942,8 @@ function simulate_typing_session {
 
     echo "✍️  Typing content from $source_file..."
 
-
     local line_count=0
+    local prev_line=""
     while IFS= read -r line || [[ -n "$line" ]]; do
         # Check if we should continue
         if ! kill -0 $$ 2>/dev/null; then
@@ -731,18 +961,12 @@ function simulate_typing_session {
             last_save_time=$(date +%s)
         fi
 
-        # Random Thinking Pause every ~20 lines
-        if (( line_count % 20 == 0 )) && (( RANDOM % 3 == 0 )); then
-            local pause=$(( 3 + RANDOM % 8 ))
-            echo "🧠  Thinking for ${pause}s..."
-            sleep "$pause"
-        fi
-
         # Check focus before typing each line
         wait_for_safe_focus
 
-        # Type the line with original indentation (Vim doesn't auto-indent like VS Code)
-        type_text "$line"
+        # Type the line with human-like behavior
+        type_text "$line" "$prev_line" "$line_count"
+        prev_line="$line"
         sleep 0.1
     done < "$source_file"
 
@@ -837,7 +1061,7 @@ function main_loop {
             echo "❌ ERROR: No files were successfully typed in this cycle!"
             echo "❌ This usually means:"
             echo "   1. The typing function encountered an error"
-            echo "   2. VS Code is not properly focused"
+            echo "   2. VS Code is not properly focused or installed"
             echo "   3. Permissions are not granted (macOS Accessibility)"
             echo ""
             echo "Stopping to prevent infinite loop..."
@@ -879,7 +1103,7 @@ INITIAL_MOUSE=$(get_mouse_pos)
 echo "📍 Initial mouse position: $INITIAL_MOUSE"
 echo ""
 
-# Initialize editor (Nano opens files individually, so just print info)
+# Initialize editor (VS Code opens files individually with -r flag)
 open_editor_workspace
 
 # Run the main loop
