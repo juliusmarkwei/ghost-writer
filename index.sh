@@ -7,6 +7,7 @@ MAX_DELAY_MS=300
 SUBPROJECT_NAME="simulation-subproject"
 SOURCE_FILE_RELATIVE=""
 MOUSE_MONITOR_ACTIVE=false
+DISABLE_AUTOCOMPLETE_HANDLING=false
 
 # Embedded Comprehensive Source (TypeScript)
 read -r -d '' DEFAULT_CONTENT << 'EOF'
@@ -131,6 +132,7 @@ function show_help {
     echo "  --max-delay <ms>       Maximum delay between keystrokes (default: 300)"
     echo "  --name <name>          Name of subproject (default: simulation-subproject)"
     echo "  --source <path>        Relative or absolute path to source file/directory"
+    echo "  --no-autocomplete      Disable VS Code auto-complete handling (use if quotes/brackets duplicate)"
     echo "  -h, --help             Show this help message"
     echo ""
     echo "Examples:"
@@ -139,6 +141,7 @@ function show_help {
     echo "  ghost-writer --name my-project           # Custom subproject name"
     echo "  ghost-writer --source src/utils.ts       # Type a specific file"
     echo "  ghost-writer --source src/               # Process all files in directory"
+    echo "  ghost-writer --no-autocomplete           # Disable auto-complete deletion"
     exit 0
 }
 
@@ -151,6 +154,7 @@ while [[ "$#" -gt 0 ]]; do
         --max-delay) MAX_DELAY_MS="$2"; shift ;;
         --name) SUBPROJECT_NAME="$2"; shift ;;
         --source) SOURCE_FILE_RELATIVE="$2"; USER_PROVIDED_SOURCE=true; shift ;;
+        --no-autocomplete) DISABLE_AUTOCOMPLETE_HANDLING=true ;;
         -h|--help) show_help ;;
         *) echo "Unknown parameter passed: $1"; exit 1 ;;
     esac
@@ -407,11 +411,16 @@ function handle_vscode_char {
     # Type the character
     type_char "$char"
 
+    # Skip auto-complete handling if disabled
+    if [[ "$DISABLE_AUTOCOMPLETE_HANDLING" == "true" ]]; then
+        return
+    fi
+
     # Check if this is an opening bracket/quote that triggers auto-complete
     case "$char" in
         '('|'{'|'['|'"'|"'"|\`)
-            # Sleep briefly to let VS Code add the closing character
-            sleep 0.05
+            # Sleep longer to ensure VS Code completes auto-completion
+            sleep 0.2
             # Delete the auto-completed closing character
             send_forward_delete 1
             ;;
