@@ -411,18 +411,29 @@ function handle_vscode_char {
     # Type the character
     type_char "$char"
 
-    # Skip auto-complete handling if disabled
-    if [[ "$DISABLE_AUTOCOMPLETE_HANDLING" == "true" ]]; then
-        return
-    fi
-
     # Check if this is an opening bracket/quote that triggers auto-complete
     case "$char" in
         '('|'{'|'['|'"'|"'"|\`)
-            # Sleep longer to ensure VS Code completes auto-completion
-            sleep 0.2
-            # Delete the auto-completed closing character
-            send_forward_delete 1
+            if [[ "$DISABLE_AUTOCOMPLETE_HANDLING" == "true" ]]; then
+                # Just add a small delay and press Escape to dismiss VS Code popups
+                sleep 0.1
+                # Press Escape to dismiss any auto-complete suggestions
+                if [[ "$OS_NAME" == "Darwin" ]]; then
+                    osascript -e 'tell application "System Events" to key code 53' 2>/dev/null
+                elif [[ "$OS_NAME" == "Linux" ]]; then
+                    xdotool key Escape
+                else
+                    powershell.exe -Command "
+                        Add-Type -AssemblyName System.Windows.Forms
+                        [System.Windows.Forms.SendKeys]::SendWait('{ESC}')
+                    " > /dev/null 2>&1
+                fi
+                sleep 0.05
+            else
+                # Original auto-complete handling (delete closing char)
+                sleep 0.2
+                send_forward_delete 1
+            fi
             ;;
     esac
 }
