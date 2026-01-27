@@ -7,7 +7,6 @@ MAX_DELAY_MS=300
 SUBPROJECT_NAME="simulation-subproject"
 SOURCE_FILE_RELATIVE=""
 MOUSE_MONITOR_ACTIVE=false
-DISABLE_AUTOCOMPLETE_HANDLING=true
 
 # Embedded Comprehensive Source (TypeScript)
 read -r -d '' DEFAULT_CONTENT << 'EOF'
@@ -132,7 +131,6 @@ function show_help {
     echo "  --max-delay <ms>       Maximum delay between keystrokes (default: 300)"
     echo "  --name <name>          Name of subproject (default: simulation-subproject)"
     echo "  --source <path>        Relative or absolute path to source file/directory"
-    echo "  --autocomplete         Enable VS Code auto-complete handling (experimental, disabled by default)"
     echo "  -h, --help             Show this help message"
     echo ""
     echo "Examples:"
@@ -141,7 +139,6 @@ function show_help {
     echo "  ghost-writer --name my-project           # Custom subproject name"
     echo "  ghost-writer --source src/utils.ts       # Type a specific file"
     echo "  ghost-writer --source src/               # Process all files in directory"
-    echo "  ghost-writer --autocomplete              # Enable auto-complete handling (experimental)"
     exit 0
 }
 
@@ -154,7 +151,6 @@ while [[ "$#" -gt 0 ]]; do
         --max-delay) MAX_DELAY_MS="$2"; shift ;;
         --name) SUBPROJECT_NAME="$2"; shift ;;
         --source) SOURCE_FILE_RELATIVE="$2"; USER_PROVIDED_SOURCE=true; shift ;;
-        --autocomplete) DISABLE_AUTOCOMPLETE_HANDLING=false ;;
         -h|--help) show_help ;;
         *) echo "Unknown parameter passed: $1"; exit 1 ;;
     esac
@@ -404,38 +400,12 @@ function send_forward_delete {
     fi
 }
 
-# Function to handle VS Code character typing with auto-complete detection
+# Function to handle VS Code character typing (simplified - no auto-complete handling)
 function handle_vscode_char {
     local char="$1"
 
-    # Type the character
+    # Just type the character - user must disable VS Code auto-complete in settings
     type_char "$char"
-
-    # Check if this is an opening bracket/quote that triggers auto-complete
-    case "$char" in
-        '('|'{'|'['|'"'|"'"|\`)
-            if [[ "$DISABLE_AUTOCOMPLETE_HANDLING" == "true" ]]; then
-                # Press Right Arrow to move past the auto-completed closing character
-                sleep 0.05
-                if [[ "$OS_NAME" == "Darwin" ]]; then
-                    # Key code 124 is Right Arrow on macOS
-                    osascript -e 'tell application "System Events" to key code 124' 2>/dev/null
-                elif [[ "$OS_NAME" == "Linux" ]]; then
-                    xdotool key Right
-                else
-                    powershell.exe -Command "
-                        Add-Type -AssemblyName System.Windows.Forms
-                        [System.Windows.Forms.SendKeys]::SendWait('{RIGHT}')
-                    " > /dev/null 2>&1
-                fi
-                sleep 0.05
-            else
-                # Original auto-complete handling (delete closing char)
-                sleep 0.2
-                send_forward_delete 1
-            fi
-            ;;
-    esac
 }
 
 # Function to type a single character

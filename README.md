@@ -46,6 +46,20 @@ A cross-platform CLI tool that simulates a developer typing code in real-time wi
     -   **Linux**: The `code` command is usually added to PATH automatically during installation
     -   **Windows**: Check "Add to PATH" during installation
 
+-   **VS Code Settings** (REQUIRED): Disable auto-complete features for clean typing simulation
+    -   Open VS Code
+    -   Press `Cmd+Shift+P` (macOS) or `Ctrl+Shift+P` (Windows/Linux)
+    -   Type: "Preferences: Open User Settings (JSON)"
+    -   Add these settings:
+    ```json
+    {
+      "editor.autoClosingBrackets": "never",
+      "editor.autoClosingQuotes": "never",
+      "editor.quickSuggestions": false
+    }
+    ```
+    -   Save and restart VS Code
+
 ### Platform-Specific
 
 #### macOS
