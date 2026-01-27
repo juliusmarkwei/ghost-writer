@@ -415,17 +415,17 @@ function handle_vscode_char {
     case "$char" in
         '('|'{'|'['|'"'|"'"|\`)
             if [[ "$DISABLE_AUTOCOMPLETE_HANDLING" == "true" ]]; then
-                # Just add a small delay and press Escape to dismiss VS Code popups
-                sleep 0.1
-                # Press Escape to dismiss any auto-complete suggestions
+                # Press Right Arrow to move past the auto-completed closing character
+                sleep 0.05
                 if [[ "$OS_NAME" == "Darwin" ]]; then
-                    osascript -e 'tell application "System Events" to key code 53' 2>/dev/null
+                    # Key code 124 is Right Arrow on macOS
+                    osascript -e 'tell application "System Events" to key code 124' 2>/dev/null
                 elif [[ "$OS_NAME" == "Linux" ]]; then
-                    xdotool key Escape
+                    xdotool key Right
                 else
                     powershell.exe -Command "
                         Add-Type -AssemblyName System.Windows.Forms
-                        [System.Windows.Forms.SendKeys]::SendWait('{ESC}')
+                        [System.Windows.Forms.SendKeys]::SendWait('{RIGHT}')
                     " > /dev/null 2>&1
                 fi
                 sleep 0.05
