@@ -230,22 +230,18 @@ function check_dependencies {
         echo "✅  'osascript' found."
     fi
 
-    # VS Code Requirement (All Platforms)
-    if ! command -v code &> /dev/null; then
-        echo "❌  Error: 'code' command not found."
-        echo "    Please install VS Code and ensure the 'code' command is in your PATH:"
+    # Nano Requirement (All Platforms)
+    if ! command -v nano &> /dev/null; then
+        echo "❌  Error: 'nano' editor not found."
+        echo "    Please install nano:"
         if [[ "$OS_NAME" == "Darwin" ]]; then
-            echo "    1. Download from https://code.visualstudio.com/"
-            echo "    2. Open VS Code and run: Cmd+Shift+P → 'Shell Command: Install code command in PATH'"
+            echo "    brew install nano"
         elif [[ "$OS_NAME" == "Linux" ]]; then
-            echo "    1. Download from https://code.visualstudio.com/"
-            echo "    2. Or install via snap: sudo snap install --classic code"
-        else
-            echo "    Download from https://code.visualstudio.com/"
+            echo "    sudo apt-get install nano  (or equivalent for your distro)"
         fi
         exit 1
     fi
-    echo "✅  'code' command found."
+    echo "✅  'nano' found."
 }
 
 check_dependencies
@@ -351,25 +347,31 @@ fi
 SUBPROJECT_PATH="$ROOT_PATH/$SUBPROJECT_NAME"
 KNOWN_EDITOR_APP=""
 
-# Function to save the current file in VS Code
+# Function to save the current file in Nano
 function save_file {
-    echo "💾 Saving file (Cmd/Ctrl+S)..."
+    echo "💾 Saving file (Ctrl+O)..."
 
     if [[ "$OS_NAME" == "Darwin" ]]; then
-        # macOS: Cmd+S
-        osascript -e 'tell application "System Events" to keystroke "s" using command down' 2>/dev/null
+        # macOS: Ctrl+O (WriteOut) then Enter to confirm
+        osascript -e 'tell application "System Events" to keystroke "o" using control down' 2>/dev/null
+        sleep 0.2
+        osascript -e 'tell application "System Events" to key code 36' 2>/dev/null  # Enter
     elif [[ "$OS_NAME" == "Linux" ]]; then
-        # Linux: Ctrl+S
-        xdotool key ctrl+s
+        # Linux: Ctrl+O then Enter
+        xdotool key ctrl+o
+        sleep 0.2
+        xdotool key Return
     else
-        # Windows: Ctrl+S
+        # Windows: Ctrl+O then Enter
         powershell.exe -Command "
             Add-Type -AssemblyName System.Windows.Forms
-            [System.Windows.Forms.SendKeys]::SendWait('^s')
+            [System.Windows.Forms.SendKeys]::SendWait('^o')
+            Start-Sleep -Milliseconds 200
+            [System.Windows.Forms.SendKeys]::SendWait('{ENTER}')
         " > /dev/null 2>&1
     fi
 
-    sleep 0.2
+    sleep 0.3
 }
 
 
@@ -400,11 +402,10 @@ function send_forward_delete {
     fi
 }
 
-# Function to handle VS Code character typing (simplified - no auto-complete handling)
-function handle_vscode_char {
+# Function to type a character (Nano has no auto-complete)
+function type_character {
     local char="$1"
-
-    # Just type the character - user must disable VS Code auto-complete in settings
+    # Nano doesn't have auto-complete, just type the character
     type_char "$char"
 }
 
@@ -630,8 +631,8 @@ function type_text {
     for (( i=0; i<len; i++ )); do
         local char="${line:$i:1}"
 
-        # Use VS Code-aware typing
-        handle_vscode_char "$char"
+        # Type the character
+        type_character "$char"
 
         # Occasionally simulate typos (not on whitespace)
         if [[ ! "$char" =~ ^[[:space:]]$ ]]; then
@@ -742,7 +743,7 @@ function get_active_app {
 function is_safe_app {
     local app_name="$1"
     case "$app_name" in
-        *Code*|*VSCode*|*code*|*vscode*|*Cursor*|*Windsurf*|*Electron*|*iTerm*|*Terminal*|*Warp*|*Alacritty*|*Hyper*|*kitty*|*Windows_Generic*)
+        *Terminal*|*iTerm*|*Warp*|*Alacritty*|*Hyper*|*kitty*|*gnome-terminal*|*xterm*|*konsole*|*Windows_Generic*)
             return 0
             ;;
         *)
@@ -827,10 +828,10 @@ function cleanup {
 
 trap cleanup SIGINT SIGTERM
 
-# VS Code files are opened individually with code -r to reuse window
+# Nano doesn't need a workspace opened - files are opened individually
 function open_editor_workspace {
-    echo "📂 Ready to open files in VS Code..."
-    echo "   (Files will open in VS Code with window reuse)"
+    echo "📂 Ready to open files in Nano..."
+    echo "   (Each file will open in a new Terminal window)"
 }
 
 
@@ -857,65 +858,50 @@ function simulate_typing_session {
     echo "✅ File created: $target_file"
 
     echo ""
-    echo "STEP 2: Opening in VS Code..."
+    echo "STEP 2: Opening in Nano..."
 
-    # Open file in VS Code (reuse existing window)
-    code -r "$target_file"
-
-    # Platform-specific window activation and maximization
+    # Open file in Nano (in a new Terminal window)
     if [[ "$OS_NAME" == "Darwin" ]]; then
-        # macOS: Activate and maximize VS Code
-        osascript -e 'tell application "Visual Studio Code" to activate' 2>/dev/null
+        # macOS: Open nano in a new Terminal window and maximize it
+        osascript -e "tell application \"Terminal\" to do script \"nano '$target_file'\"" 2>/dev/null
+        osascript -e 'tell application "Terminal" to activate' 2>/dev/null
         sleep 0.5
-        # Maximize window
+        # Maximize the Terminal window
         osascript -e '
             tell application "System Events"
-                tell process "Visual Studio Code"
+                tell process "Terminal"
                     set frontWindow to first window
                     set position of frontWindow to {0, 0}
-                    try
-                        set size of frontWindow to {1920, 1080}
-                    end try
+                    set size of frontWindow to {1920, 1080}
                 end tell
             end tell
         ' 2>/dev/null
     elif [[ "$OS_NAME" == "Linux" ]]; then
-        # Linux: Activate and maximize VS Code
-        sleep 0.5
-        if command -v wmctrl &> /dev/null; then
-            wmctrl -a "Visual Studio Code" 2>/dev/null
-            wmctrl -r "Visual Studio Code" -b add,maximized_vert,maximized_horz 2>/dev/null
-        elif command -v xdotool &> /dev/null; then
-            sleep 0.3
-            xdotool search --name "Visual Studio Code" windowactivate 2>/dev/null
-            xdotool getactivewindow windowsize 100% 100% 2>/dev/null
+        # Linux: Open nano in a new terminal (try common terminal emulators) with maximize
+        if command -v gnome-terminal &> /dev/null; then
+            gnome-terminal --maximize -- nano "$target_file" &
+        elif command -v xterm &> /dev/null; then
+            xterm -maximized -e nano "$target_file" &
+        else
+            echo "⚠️  Please open nano manually: nano $target_file"
         fi
     else
-        # Windows: Activate and maximize
-        sleep 0.5
-        powershell.exe -Command "
-            Add-Type -AssemblyName System.Windows.Forms
-            \$hwnd = [System.Diagnostics.Process]::GetProcessesByName('Code') | Select-Object -First 1 -ExpandProperty MainWindowHandle
-            if (\$hwnd) {
-                [void][System.Windows.Forms.SendKeys]::SendWait('%{TAB}')
-                Start-Sleep -Milliseconds 300
-                [void][System.Windows.Forms.SendKeys]::SendWait('#{UP}')
-            }
-        " 2>/dev/null
+        # Windows: Open nano via Git Bash / WSL (maximized)
+        start /max bash -c "nano '$target_file'" 2>/dev/null || echo "Please open nano manually: nano $target_file"
     fi
 
     echo ""
-    echo "STEP 3: Waiting for you to focus VS Code..."
+    echo "STEP 3: Waiting for you to focus Nano..."
     if [[ "$is_first_file" == "true" ]]; then
-        echo "⏳ Please click on the VS Code window (3 seconds)..."
-        sleep 3
+        echo "⏳ Please click on the Terminal/Nano window (5 seconds)..."
+        sleep 5
     else
-        echo "⏳ Please click on the VS Code window (2 seconds)..."
-        sleep 2
+        echo "⏳ Please click on the Terminal/Nano window (3 seconds)..."
+        sleep 3
     fi
 
     echo ""
-    echo "STEP 4: Checking if VS Code is focused..."
+    echo "STEP 4: Checking if Terminal is focused..."
     wait_for_safe_focus
 
     echo ""
@@ -1051,7 +1037,7 @@ function main_loop {
             echo "❌ ERROR: No files were successfully typed in this cycle!"
             echo "❌ This usually means:"
             echo "   1. The typing function encountered an error"
-            echo "   2. VS Code is not properly focused or installed"
+            echo "   2. Terminal/Nano is not properly focused"
             echo "   3. Permissions are not granted (macOS Accessibility)"
             echo ""
             echo "Stopping to prevent infinite loop..."
@@ -1093,7 +1079,7 @@ INITIAL_MOUSE=$(get_mouse_pos)
 echo "📍 Initial mouse position: $INITIAL_MOUSE"
 echo ""
 
-# Initialize editor (VS Code opens files individually with -r flag)
+# Initialize editor (Nano opens files individually, so just print info)
 open_editor_workspace
 
 # Run the main loop

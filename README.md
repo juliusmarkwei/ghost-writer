@@ -1,6 +1,6 @@
 # GhostWriter
 
-A cross-platform CLI tool that simulates a developer typing code in real-time with sophisticated human-like behavior. It reads source files from your project and "types" them into VS Code, complete with context-aware typing speeds, intelligent pauses, and even occasional typos—perfect for demonstrations, tutorials, or just having fun watching code write itself naturally.
+A cross-platform CLI tool that simulates a developer typing code in real-time with sophisticated human-like behavior. It reads source files from your project and "types" them into Nano (terminal-based editor), complete with context-aware typing speeds, intelligent pauses, and even occasional typos—perfect for demonstrations, tutorials, or just having fun watching code write itself naturally.
 
 ## ✨ Features
 
@@ -19,18 +19,17 @@ A cross-platform CLI tool that simulates a developer typing code in real-time wi
     -   Types 2-4 characters, realizes "mistake", pauses briefly
     -   Backtracks and retypes correctly
     -   Never breaks code structure (only in safe zones)
--   **VS Code Auto-Complete Handling**: Seamlessly manages VS Code's bracket/quote auto-completion
 
 ### 🛡️ Safety & Control
 
 -   **Mouse Movement Detection**: Instantly stops when you move your mouse
--   **Smart Focus Management**: Only types into VS Code, never in other applications
+-   **Smart Focus Management**: Only types into Terminal/Nano, never in other applications
 -   **Graceful Cleanup**: Proper signal handling, no zombie processes
 
 ### 🚀 Workflow Features
 
 -   **Directory & File Support**: Process entire directories or individual files
--   **Automated Workflow**: Opens files in VS Code and starts typing automatically
+-   **Automated Workflow**: Opens files in Nano and starts typing automatically
 -   **Looping Mode**: Runs continuously for a specified duration (default 30 minutes)
 -   **Language Agnostic**: Works with any programming language or text file
 -   **Built-in Test Source**: Comprehensive TypeScript test content included
@@ -40,25 +39,10 @@ A cross-platform CLI tool that simulates a developer typing code in real-time wi
 
 ### All Platforms
 
--   **VS Code**: Must be installed with the `code` command in your PATH
-    -   Download from [https://code.visualstudio.com/](https://code.visualstudio.com/)
-    -   **macOS**: After installing VS Code, open it and press `Cmd+Shift+P` → "Shell Command: Install 'code' command in PATH"
-    -   **Linux**: The `code` command is usually added to PATH automatically during installation
-    -   **Windows**: Check "Add to PATH" during installation
-
--   **VS Code Settings** (REQUIRED): Disable auto-complete features for clean typing simulation
-    -   Open VS Code
-    -   Press `Cmd+Shift+P` (macOS) or `Ctrl+Shift+P` (Windows/Linux)
-    -   Type: "Preferences: Open User Settings (JSON)"
-    -   Add these settings:
-    ```json
-    {
-      "editor.autoClosingBrackets": "never",
-      "editor.autoClosingQuotes": "never",
-      "editor.quickSuggestions": false
-    }
-    ```
-    -   Save and restart VS Code
+-   **Nano**: Terminal-based text editor (usually pre-installed on macOS and Linux)
+    -   macOS: `brew install nano` (if not present)
+    -   Linux: `sudo apt-get install nano` (or equivalent)
+    -   Windows: Available via Git Bash or WSL
 
 ### Platform-Specific
 
@@ -226,11 +210,10 @@ ghost-writer --source src/components/ --duration 120 --min-delay 80 --max-delay 
     - **Single file**: Types just that file
     - **Directory**: Processes all files recursively (excluding hidden files and `node_modules`)
 4. **Human-Like Typing Simulation**:
-    - Opens each file in VS Code (reuses existing window with `code -r`)
+    - Opens each file in Nano (in a new Terminal window)
     - **Context-aware typing**: Faster on whitespace, slower on special characters
     - **Smart pauses**: Automatically pauses before functions, classes, and other major constructs
     - **Typo simulation**: Occasional backspace/correction (~5% of characters)
-    - **Auto-complete handling**: Seamlessly removes VS Code's auto-completed brackets/quotes
     - **Safety monitoring**: Continuously monitors mouse position and stops if movement detected
 5. **Looping**: After completing all files, waits briefly and restarts until duration expires
 
@@ -249,10 +232,10 @@ ghost-writer --source src/components/ --duration 120 --min-delay 80 --max-delay 
 
 **Prevents typing in wrong applications**:
 
--   Only types into VS Code and other safe applications
--   Automatically refocuses your editor if focus is lost
+-   Only types into Terminal/Nano and other safe applications
+-   Automatically refocuses your terminal if focus is lost
 -   Pauses if an unsafe application is active
--   Whitelist includes: VS Code, Cursor, Windsurf, Terminal, iTerm, Warp, and other code editors
+-   Whitelist includes: Terminal, iTerm, Warp, Alacritty, Hyper, kitty, and other terminal emulators
 
 ### Graceful Cleanup
 
@@ -292,31 +275,23 @@ sudo pacman -S xdotool
 sudo zypper install xdotool
 ```
 
-### VS Code: `code: command not found`
+### Nano: `nano: command not found`
 
 **Solution:**
 
-The `code` command must be in your PATH. Here's how to add it:
-
 **macOS:**
 
-1. Open VS Code
-2. Press `Cmd+Shift+P` to open Command Palette
-3. Type: "Shell Command: Install 'code' command in PATH"
-4. Select it and restart your terminal
+```bash
+brew install nano
+```
 
 **Linux:**
 
 ```bash
-# Usually added automatically during VS Code installation
-# If not, reinstall VS Code or add it to PATH manually
-export PATH="$PATH:/usr/share/code/bin"
+sudo apt-get install nano  # Debian/Ubuntu
+sudo dnf install nano      # Fedora
+sudo pacman -S nano        # Arch
 ```
-
-**Windows:**
-
--   During VS Code installation, check "Add to PATH"
--   Or add VS Code's bin folder to your system PATH manually
 
 ### Windows: Script won't run
 
@@ -356,8 +331,8 @@ ghost-writer --min-delay 300 --max-delay 600
 
 1. **Mouse moved**: Even slight touchpad touches trigger termination (this is intentional!)
 2. **Source file not found**: Check the error message and verify the path
-3. **VS Code not installed**: The script requires VS Code with the `code` command in PATH
-4. **VS Code not focused**: Make sure VS Code window is active when the script starts
+3. **Nano not installed**: The script needs Nano to be installed
+4. **Terminal not focused**: Make sure Terminal window is active when typing starts
 
 ### Permission errors during installation
 
