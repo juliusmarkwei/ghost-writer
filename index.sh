@@ -2,11 +2,17 @@
 
 # Defaults
 DURATION_MINUTES=30
-MIN_DELAY_MS=100
-MAX_DELAY_MS=300
+MIN_DELAY_MS=150
+MAX_DELAY_MS=500
 SUBPROJECT_NAME="simulation-subproject"
 SOURCE_FILE_RELATIVE=""
 MOUSE_MONITOR_ACTIVE=false
+
+# Browser Search Configuration
+ENABLE_BROWSER_SEARCH=true
+BROWSER_SEARCH_FREQUENCY=25
+LAST_SEARCH_TIME=0
+SEARCH_COOLDOWN=60
 
 # Embedded Comprehensive Source (TypeScript)
 read -r -d '' DEFAULT_CONTENT << 'EOF'
@@ -126,19 +132,24 @@ function show_help {
     echo "Usage: ghost-writer [options]"
     echo ""
     echo "Options:"
-    echo "  -d, --duration <min>   Duration in minutes (default: 30)"
-    echo "  --min-delay <ms>       Minimum delay between keystrokes (default: 100)"
-    echo "  --max-delay <ms>       Maximum delay between keystrokes (default: 300)"
-    echo "  --name <name>          Name of subproject (default: simulation-subproject)"
-    echo "  --source <path>        Relative or absolute path to source file/directory"
-    echo "  -h, --help             Show this help message"
+    echo "  -d, --duration <min>      Duration in minutes (default: 30)"
+    echo "  --min-delay <ms>          Minimum delay between keystrokes (default: 150)"
+    echo "  --max-delay <ms>          Maximum delay between keystrokes (default: 500)"
+    echo "  --name <name>             Name of subproject (default: simulation-subproject)"
+    echo "  --source <path>           Relative or absolute path to source file/directory"
+    echo "  --enable-browser-search   Enable browser search feature (default)"
+    echo "  --disable-browser-search  Disable browser search feature"
+    echo "  --search-frequency <n>    Search trigger probability % (default: 25)"
+    echo "  -h, --help                Show this help message"
     echo ""
     echo "Examples:"
-    echo "  ghost-writer --duration 60               # Run for 1 hour with default source"
-    echo "  ghost-writer --min-delay 50 --max-delay 150 # Type faster"
-    echo "  ghost-writer --name my-project           # Custom subproject name"
-    echo "  ghost-writer --source src/utils.ts       # Type a specific file"
-    echo "  ghost-writer --source src/               # Process all files in directory"
+    echo "  ghost-writer --duration 60                      # Run for 1 hour with default source"
+    echo "  ghost-writer --min-delay 50 --max-delay 150     # Type faster"
+    echo "  ghost-writer --disable-browser-search           # Disable browser searches"
+    echo "  ghost-writer --search-frequency 50              # More frequent searches (50%)"
+    echo "  ghost-writer --name my-project                  # Custom subproject name"
+    echo "  ghost-writer --source src/utils.ts              # Type a specific file"
+    echo "  ghost-writer --source src/                      # Process all files in directory"
     exit 0
 }
 
@@ -151,6 +162,9 @@ while [[ "$#" -gt 0 ]]; do
         --max-delay) MAX_DELAY_MS="$2"; shift ;;
         --name) SUBPROJECT_NAME="$2"; shift ;;
         --source) SOURCE_FILE_RELATIVE="$2"; USER_PROVIDED_SOURCE=true; shift ;;
+        --enable-browser-search) ENABLE_BROWSER_SEARCH="true" ;;
+        --disable-browser-search) ENABLE_BROWSER_SEARCH="false" ;;
+        --search-frequency) BROWSER_SEARCH_FREQUENCY="$2"; shift ;;
         -h|--help) show_help ;;
         *) echo "Unknown parameter passed: $1"; exit 1 ;;
     esac
@@ -374,7 +388,94 @@ function save_file {
     sleep 0.3
 }
 
+# Function to open browser with search query
+function open_browser_search {
+    local query="$1"
+    local encoded_query=$(echo "$query" | sed 's/ /+/g')
+    local search_url="https://www.google.com/search?q=$encoded_query"
 
+    echo "🔍  Opening browser: '$query'"
+
+    if [[ "$OS_NAME" == "Darwin" ]]; then
+        open "$search_url" 2>/dev/null &
+    elif [[ "$OS_NAME" == "Linux" ]]; then
+        xdg-open "$search_url" 2>/dev/null &
+    else
+        powershell.exe -Command "Start-Process '$search_url'" > /dev/null 2>&1 &
+    fi
+
+    sleep 2  # Brief pause after opening
+}
+
+# Function to generate contextual search queries
+function generate_contextual_search {
+    local source_file="$1"
+    local current_line="$2"
+
+    # Detect language from file extension
+    local ext="${source_file##*.}"
+    local language=""
+    case "$ext" in
+        ts|tsx) language="TypeScript" ;;
+        js|jsx) language="JavaScript" ;;
+        py) language="Python" ;;
+        go) language="Go" ;;
+        rs) language="Rust" ;;
+        *) language="Programming" ;;
+    esac
+
+    # Extract context from current line if available
+    if [[ "$current_line" =~ function[[:space:]]+([a-zA-Z_][a-zA-Z0-9_]*) ]]; then
+        echo "$language function ${BASH_REMATCH[1]} best practices"
+    elif [[ "$current_line" =~ class[[:space:]]+([a-zA-Z_][a-zA-Z0-9_]*) ]]; then
+        echo "$language class design patterns"
+    elif [[ "$current_line" =~ import.*from[[:space:]]+[\'\"]([a-zA-Z0-9@/-]+) ]]; then
+        echo "${BASH_REMATCH[1]} documentation"
+    else
+        # Fallback to generic contextual searches
+        local SEARCH_QUERIES=(
+            "$language best practices 2025"
+            "$language performance optimization"
+            "$language design patterns"
+            "$language error handling"
+            "$language testing framework"
+            "clean code principles $language"
+        )
+        local random_idx=$((RANDOM % ${#SEARCH_QUERIES[@]}))
+        echo "${SEARCH_QUERIES[$random_idx]}"
+    fi
+}
+
+# Function to determine if browser search should be triggered
+function should_trigger_browser_search {
+    local pause_type="$1"
+
+    # Check if feature enabled
+    [[ "$ENABLE_BROWSER_SEARCH" != "true" ]] && return 1
+
+    # Check cooldown (avoid spam)
+    local current_time=$(date +%s)
+    local time_since_last=$((current_time - LAST_SEARCH_TIME))
+    [[ $time_since_last -lt $SEARCH_COOLDOWN ]] && return 1
+
+    # Trigger on long or medium pauses with configured probability
+    case "$pause_type" in
+        long)
+            # Higher chance during long pauses (before functions/classes)
+            if (( RANDOM % 100 < BROWSER_SEARCH_FREQUENCY * 2 )); then
+                return 0
+            fi
+            ;;
+        medium)
+            # Normal chance during medium pauses
+            if (( RANDOM % 100 < BROWSER_SEARCH_FREQUENCY )); then
+                return 0
+            fi
+            ;;
+    esac
+
+    return 1
+}
 
 # Function to send forward delete (to remove auto-completed closing chars)
 function send_forward_delete {
@@ -618,11 +719,22 @@ function type_text {
     local line="$1"
     local prev_line="$2"
     local line_number="$3"
+    local source_file="${4:-}"
 
     # Check for pause before line
     local pause_type=$(should_pause_before_line "$line" "$prev_line" "$line_number")
     if [[ "$pause_type" != "none" ]]; then
-        execute_pause "$pause_type" "$line"
+        # Check if should trigger browser search
+        if should_trigger_browser_search "$pause_type"; then
+            local search_term=$(generate_contextual_search "$source_file" "$line")
+            open_browser_search "$search_term"
+            LAST_SEARCH_TIME=$(date +%s)
+            # Execute shorter pause after browser opens
+            execute_pause "short" "$line"
+        else
+            # Normal pause without browser
+            execute_pause "$pause_type" "$line"
+        fi
     fi
 
     local len=${#line}
@@ -941,7 +1053,7 @@ function simulate_typing_session {
         wait_for_safe_focus
 
         # Type the line with human-like behavior
-        type_text "$line" "$prev_line" "$line_count"
+        type_text "$line" "$prev_line" "$line_count" "$source_file"
         prev_line="$line"
         sleep 0.1
     done < "$source_file"

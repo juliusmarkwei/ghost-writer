@@ -27,6 +27,11 @@ A cross-platform CLI tool that simulates a developer typing code in real-time wi
     -   Types 2-4 characters, realizes "mistake", pauses briefly
     -   Backtracks and retypes correctly
     -   Never breaks code structure (only in safe zones)
+-   **Browser Search Integration**: Periodically opens browser to search for programming topics
+    -   Contextual searches based on what's being typed (functions, classes, imports)
+    -   Triggers at natural pause points (~25% of long/medium pauses)
+    -   Respects 60-second cooldown to avoid spam
+    -   Enabled by default (can be disabled with `--disable-browser-search`)
 
 ### 🛡️ Safety & Control
 
@@ -144,14 +149,17 @@ This will:
 
 ### CLI Options
 
-| Option                 | Alias | Default                 | Description                                      |
-| :--------------------- | :---- | :---------------------- | :----------------------------------------------- |
-| `--duration <minutes>` | `-d`  | `30`                    | How long to run the simulation (in minutes)      |
-| `--min-delay <ms>`     |       | `100`                   | Minimum delay between keystrokes (faster typing) |
-| `--max-delay <ms>`     |       | `300`                   | Maximum delay between keystrokes (slower typing) |
-| `--name <name>`        |       | `simulation-subproject` | Name of the temporary subproject folder          |
-| `--source <path>`      |       | (auto-detect)           | Path to source file or directory to type         |
-| `--help`               | `-h`  |                         | Display help message and exit                    |
+| Option                       | Alias | Default                 | Description                                      |
+| :--------------------------- | :---- | :---------------------- | :----------------------------------------------- |
+| `--duration <minutes>`       | `-d`  | `30`                    | How long to run the simulation (in minutes)      |
+| `--min-delay <ms>`           |       | `150`                   | Minimum delay between keystrokes (faster typing) |
+| `--max-delay <ms>`           |       | `500`                   | Maximum delay between keystrokes (slower typing) |
+| `--name <name>`              |       | `simulation-subproject` | Name of the temporary subproject folder          |
+| `--source <path>`            |       | (auto-detect)           | Path to source file or directory to type         |
+| `--enable-browser-search`    |       | (enabled)               | Enable browser search feature (default)          |
+| `--disable-browser-search`   |       |                         | Disable browser search feature                   |
+| `--search-frequency <n>`     |       | `25`                    | Search trigger probability % (1-100)             |
+| `--help`                     | `-h`  |                         | Display help message and exit                    |
 
 ### Examples
 
@@ -173,10 +181,22 @@ ghost-writer --duration 60
 ghost-writer --min-delay 50 --max-delay 150
 ```
 
-#### Type slower (200-500ms delays)
+#### Type slower (200-700ms delays)
 
 ```bash
-ghost-writer --min-delay 200 --max-delay 500
+ghost-writer --min-delay 200 --max-delay 700
+```
+
+#### Disable browser searches
+
+```bash
+ghost-writer --disable-browser-search
+```
+
+#### More frequent browser searches (50% trigger rate)
+
+```bash
+ghost-writer --search-frequency 50
 ```
 
 #### Use a specific file
@@ -219,9 +239,10 @@ ghost-writer --source src/components/ --duration 120 --min-delay 80 --max-delay 
     - **Directory**: Processes all files recursively (excluding hidden files and `node_modules`)
 4. **Human-Like Typing Simulation**:
     - Opens each file in Nano (in a new Terminal window)
-    - **Context-aware typing**: Faster on whitespace, slower on special characters
+    - **Context-aware typing**: Faster on whitespace, slower on special characters (150-500ms base delays)
     - **Smart pauses**: Automatically pauses before functions, classes, and other major constructs
     - **Typo simulation**: Occasional backspace/correction (~5% of characters)
+    - **Browser searches**: Periodically opens browser to search for relevant programming topics (~25% of pauses)
     - **Safety monitoring**: Continuously monitors mouse position and stops if movement detected
 5. **Looping**: After completing all files, waits briefly and restarts until duration expires
 
