@@ -32,7 +32,7 @@ This is the single executable bash script that contains the entire application l
    - **Windows**: PowerShell's `System.Windows.Forms.SendKeys`
 7. **VS Code Integration** (lines 377-395): `handle_vscode_char()` function manages auto-complete by detecting opening brackets/quotes and deleting auto-completed closing characters
 8. **Browser Search Integration** (lines 410-580): Realistic developer research behavior with full interaction:
-   - `activate_browser()`: Focuses browser window (Chrome, Safari, Firefox, Edge)
+   - `activate_browser()`: Focuses browser window (respects user's default browser)
    - `scroll_page()`: Scrolls down with random delays to simulate reading
    - `click_first_link()`: Presses Tab+Enter to click first search result
    - `minimize_browser()`: Minimizes browser window after reading

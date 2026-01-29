@@ -32,6 +32,7 @@ A cross-platform CLI tool that simulates a developer typing code in real-time wi
 -   **VS Code Auto-Complete Handling**: Seamlessly manages VS Code's bracket/quote auto-completion
 -   **Browser Search Integration**: Periodically opens browser to search for programming topics with realistic interaction
     -   Contextual searches based on what's being typed (functions, classes, imports)
+    -   **Uses your default browser** (Chrome, Safari, Firefox, Edge, or any other)
     -   **Realistic browsing behavior**: Opens search → scrolls results (2-4 times) → clicks first link → scrolls article (4-7 times) → reads for 3-7s → minimizes browser → refocuses editor
     -   Triggers at natural pause points (~25% of long/medium pauses)
     -   Respects 60-second cooldown to avoid spam
