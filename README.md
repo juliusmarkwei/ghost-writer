@@ -26,6 +26,7 @@ A cross-platform CLI tool that simulates a developer typing code in real-time wi
     -   Never breaks code structure (only in safe zones)
 -   **Browser Search Integration**: Periodically opens browser to search for programming topics with realistic interaction
     -   Contextual searches based on what's being typed (functions, classes, imports)
+    -   **Uses your default browser** (Chrome, Safari, Firefox, Edge, or any other)
     -   **Realistic browsing behavior**: Opens search → scrolls results (2-4 times) → clicks first link → scrolls article (4-7 times) → reads for 3-7s → minimizes browser → refocuses editor
     -   Triggers at natural pause points (~25% of long/medium pauses)
     -   Respects 60-second cooldown to avoid spam

@@ -388,21 +388,17 @@ function save_file {
     sleep 0.3
 }
 
-# Function to activate browser window
+# Function to activate browser window (uses frontmost app - respects user's default browser)
 function activate_browser {
     if [[ "$OS_NAME" == "Darwin" ]]; then
-        # Try common browsers in order of popularity
-        osascript -e 'tell application "Google Chrome" to activate' 2>/dev/null || \
-        osascript -e 'tell application "Safari" to activate' 2>/dev/null || \
-        osascript -e 'tell application "Firefox" to activate' 2>/dev/null || \
-        osascript -e 'tell application "Microsoft Edge" to activate' 2>/dev/null
+        # On macOS, 'open' command already brings browser to front
+        # Just ensure it's activated (this activates whatever browser opened the URL)
+        osascript -e 'tell application "System Events" to set frontmost of first process whose frontmost is true to true' 2>/dev/null
     elif [[ "$OS_NAME" == "Linux" ]]; then
-        # Try to activate browser windows
-        xdotool search --name "Chrome" windowactivate 2>/dev/null || \
-        xdotool search --name "Firefox" windowactivate 2>/dev/null || \
-        xdotool search --name "Safari" windowactivate 2>/dev/null
+        # On Linux, activate the most recently active window (likely the browser)
+        xdotool windowactivate $(xdotool getactivewindow) 2>/dev/null
     else
-        # Windows - Alt+Tab to switch
+        # Windows - Alt+Tab to ensure browser is active
         powershell.exe -Command "
             Add-Type -AssemblyName System.Windows.Forms
             [System.Windows.Forms.SendKeys]::SendWait('%{TAB}')
