@@ -548,6 +548,26 @@ function open_browser_search {
     echo "   🔄 Refocusing editor..."
     refocus_app
     sleep 0.5
+
+    # Step 11: Ensure we're back in Insert mode in Vim
+    # First press Escape to ensure we're in Normal mode, then 'i' to enter Insert mode
+    if [[ "$OS_NAME" == "Darwin" ]]; then
+        osascript -e 'tell application "System Events" to key code 53' 2>/dev/null  # Escape
+        sleep 0.2
+        osascript -e 'tell application "System Events" to keystroke "i"' 2>/dev/null
+    elif [[ "$OS_NAME" == "Linux" ]]; then
+        xdotool key Escape
+        sleep 0.2
+        xdotool type "i"
+    else
+        powershell.exe -Command "
+            Add-Type -AssemblyName System.Windows.Forms
+            [System.Windows.Forms.SendKeys]::SendWait('{ESC}')
+            Start-Sleep -Milliseconds 200
+            [System.Windows.Forms.SendKeys]::SendWait('i')
+        " > /dev/null 2>&1
+    fi
+    sleep 0.3
 }
 
 # Function to generate contextual search queries
