@@ -388,7 +388,97 @@ function save_file {
     sleep 0.3
 }
 
-# Function to open browser with search query
+# Function to activate browser window
+function activate_browser {
+    if [[ "$OS_NAME" == "Darwin" ]]; then
+        # Try common browsers in order of popularity
+        osascript -e 'tell application "Google Chrome" to activate' 2>/dev/null || \
+        osascript -e 'tell application "Safari" to activate' 2>/dev/null || \
+        osascript -e 'tell application "Firefox" to activate' 2>/dev/null || \
+        osascript -e 'tell application "Microsoft Edge" to activate' 2>/dev/null
+    elif [[ "$OS_NAME" == "Linux" ]]; then
+        # Try to activate browser windows
+        xdotool search --name "Chrome" windowactivate 2>/dev/null || \
+        xdotool search --name "Firefox" windowactivate 2>/dev/null || \
+        xdotool search --name "Safari" windowactivate 2>/dev/null
+    else
+        # Windows - Alt+Tab to switch
+        powershell.exe -Command "
+            Add-Type -AssemblyName System.Windows.Forms
+            [System.Windows.Forms.SendKeys]::SendWait('%{TAB}')
+        " > /dev/null 2>&1
+    fi
+}
+
+# Function to scroll page slowly (simulate reading)
+function scroll_page {
+    local num_scrolls="$1"
+
+    for (( i=0; i<num_scrolls; i++ )); do
+        if [[ "$OS_NAME" == "Darwin" ]]; then
+            # Scroll down using down arrow or space
+            osascript -e 'tell application "System Events" to key code 125' 2>/dev/null  # Down arrow
+        elif [[ "$OS_NAME" == "Linux" ]]; then
+            xdotool key Down 2>/dev/null
+        else
+            powershell.exe -Command "
+                Add-Type -AssemblyName System.Windows.Forms
+                [System.Windows.Forms.SendKeys]::SendWait('{DOWN}')
+            " > /dev/null 2>&1
+        fi
+
+        # Random delay between scrolls (0.3-0.8s) - simulates reading
+        local delay=$(awk "BEGIN {print (0.3 + rand() * 0.5)}")
+        sleep "$delay"
+    done
+}
+
+# Function to click first search result (press Enter or Tab+Enter)
+function click_first_link {
+    echo "   🖱️  Clicking first search result..."
+
+    # Small delay before clicking
+    sleep 0.5
+
+    if [[ "$OS_NAME" == "Darwin" ]]; then
+        # Press Tab to focus first link, then Enter to click
+        osascript -e 'tell application "System Events" to keystroke tab' 2>/dev/null
+        sleep 0.3
+        osascript -e 'tell application "System Events" to keystroke return' 2>/dev/null
+    elif [[ "$OS_NAME" == "Linux" ]]; then
+        xdotool key Tab 2>/dev/null
+        sleep 0.3
+        xdotool key Return 2>/dev/null
+    else
+        powershell.exe -Command "
+            Add-Type -AssemblyName System.Windows.Forms
+            [System.Windows.Forms.SendKeys]::SendWait('{TAB}')
+            Start-Sleep -Milliseconds 300
+            [System.Windows.Forms.SendKeys]::SendWait('{ENTER}')
+        " > /dev/null 2>&1
+    fi
+}
+
+# Function to minimize or close browser
+function minimize_browser {
+    echo "   ↙️  Minimizing browser..."
+
+    if [[ "$OS_NAME" == "Darwin" ]]; then
+        # Cmd+M to minimize window
+        osascript -e 'tell application "System Events" to keystroke "m" using command down' 2>/dev/null
+    elif [[ "$OS_NAME" == "Linux" ]]; then
+        # Minimize active window
+        xdotool getactivewindow windowminimize 2>/dev/null
+    else
+        # Windows - Minimize window
+        powershell.exe -Command "
+            Add-Type -AssemblyName System.Windows.Forms
+            [System.Windows.Forms.SendKeys]::SendWait('%{F9}')
+        " > /dev/null 2>&1
+    fi
+}
+
+# Function to open browser with search query and simulate realistic interaction
 function open_browser_search {
     local query="$1"
     local encoded_query=$(echo "$query" | sed 's/ /+/g')
@@ -396,6 +486,7 @@ function open_browser_search {
 
     echo "🔍  Opening browser: '$query'"
 
+    # Step 1: Open browser with search
     if [[ "$OS_NAME" == "Darwin" ]]; then
         open "$search_url" 2>/dev/null &
     elif [[ "$OS_NAME" == "Linux" ]]; then
@@ -404,7 +495,44 @@ function open_browser_search {
         powershell.exe -Command "Start-Process '$search_url'" > /dev/null 2>&1 &
     fi
 
-    sleep 2  # Brief pause after opening
+    # Step 2: Wait for browser to open and page to load
+    echo "   ⏳ Waiting for page to load..."
+    sleep 3
+
+    # Step 3: Activate browser window
+    activate_browser
+    sleep 0.5
+
+    # Step 4: Scroll search results (simulate reading results)
+    echo "   📜 Scrolling search results..."
+    local search_scrolls=$((2 + RANDOM % 3))  # 2-4 scrolls
+    scroll_page "$search_scrolls"
+
+    # Step 5: Click on first search result
+    click_first_link
+
+    # Step 6: Wait for article/documentation page to load
+    echo "   ⏳ Loading article..."
+    sleep 2
+
+    # Step 7: Scroll article (simulate reading content)
+    echo "   📖 Reading content..."
+    local article_scrolls=$((4 + RANDOM % 4))  # 4-7 scrolls
+    scroll_page "$article_scrolls"
+
+    # Step 8: Stay on page simulating reading time
+    local reading_time=$((3 + RANDOM % 5))  # 3-7 additional seconds
+    echo "   👀 Reading for ${reading_time}s..."
+    sleep "$reading_time"
+
+    # Step 9: Minimize browser
+    minimize_browser
+    sleep 0.5
+
+    # Step 10: Refocus editor
+    echo "   🔄 Refocusing editor..."
+    refocus_app
+    sleep 0.5
 }
 
 # Function to generate contextual search queries

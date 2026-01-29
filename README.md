@@ -1,14 +1,11 @@
 # GhostWriter
 
-> **📍 You are on the `nano` branch** - This version uses Nano editor
->
-> **Other options:**
-> - **[`main`](https://github.com/juliusmarkwei/ghost-writer/tree/main)** - Vim (default, recommended)
-> - **[`vs-code`](https://github.com/juliusmarkwei/ghost-writer/tree/vs-code)** - VS Code (experimental)
->
-> See [BRANCHES.md](https://github.com/juliusmarkwei/ghost-writer/blob/main/BRANCHES.md) for comparison
+A cross-platform CLI tool that simulates a developer typing code in real-time with sophisticated human-like behavior. It reads source files from your project and "types" them into Vim (terminal-based editor), complete with context-aware typing speeds, intelligent pauses, and even occasional typos—perfect for demonstrations, tutorials, or just having fun watching code write itself naturally.
 
-A cross-platform CLI tool that simulates a developer typing code in real-time with sophisticated human-like behavior. It reads source files from your project and "types" them into Nano (terminal-based editor), complete with context-aware typing speeds, intelligent pauses, and even occasional typos—perfect for demonstrations, tutorials, or just having fun watching code write itself naturally.
+> **Editor Options**: GhostWriter supports multiple editors on different branches:
+> - **`main`** - Vim (default, most stable)
+> - **`nano`** - Nano editor (simpler, no mode switching)
+> - **`vs-code`** - VS Code (experimental, requires special settings)
 
 ## ✨ Features
 
@@ -27,22 +24,24 @@ A cross-platform CLI tool that simulates a developer typing code in real-time wi
     -   Types 2-4 characters, realizes "mistake", pauses briefly
     -   Backtracks and retypes correctly
     -   Never breaks code structure (only in safe zones)
--   **Browser Search Integration**: Periodically opens browser to search for programming topics
+-   **Browser Search Integration**: Periodically opens browser to search for programming topics with realistic interaction
     -   Contextual searches based on what's being typed (functions, classes, imports)
+    -   **Realistic browsing behavior**: Opens search → scrolls results (2-4 times) → clicks first link → scrolls article (4-7 times) → reads for 3-7s → minimizes browser → refocuses editor
     -   Triggers at natural pause points (~25% of long/medium pauses)
     -   Respects 60-second cooldown to avoid spam
+    -   Total interaction time: 12-22 seconds per search
     -   Enabled by default (can be disabled with `--disable-browser-search`)
 
 ### 🛡️ Safety & Control
 
 -   **Mouse Movement Detection**: Instantly stops when you move your mouse
--   **Smart Focus Management**: Only types into Terminal/Nano, never in other applications
+-   **Smart Focus Management**: Only types into Terminal/Vim, never in other applications
 -   **Graceful Cleanup**: Proper signal handling, no zombie processes
 
 ### 🚀 Workflow Features
 
 -   **Directory & File Support**: Process entire directories or individual files
--   **Automated Workflow**: Opens files in Nano and starts typing automatically
+-   **Automated Workflow**: Opens files in Vim and starts typing automatically
 -   **Looping Mode**: Runs continuously for a specified duration (default 30 minutes)
 -   **Language Agnostic**: Works with any programming language or text file
 -   **Built-in Test Source**: Comprehensive TypeScript test content included
@@ -52,9 +51,9 @@ A cross-platform CLI tool that simulates a developer typing code in real-time wi
 
 ### All Platforms
 
--   **Nano**: Terminal-based text editor (usually pre-installed on macOS and Linux)
-    -   macOS: `brew install nano` (if not present)
-    -   Linux: `sudo apt-get install nano` (or equivalent)
+-   **Vim**: Terminal-based text editor (usually pre-installed on macOS and Linux)
+    -   macOS: `brew install vim` (if not present)
+    -   Linux: `sudo apt-get install vim` (or equivalent)
     -   Windows: Available via Git Bash or WSL
 
 ### Platform-Specific
@@ -78,15 +77,27 @@ A cross-platform CLI tool that simulates a developer typing code in real-time wi
 
 ### Quick Install (Recommended)
 
-Run this one-liner in your terminal to download and install `ghost-writer` with Nano:
+**Install with Vim (default, most stable):**
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/juliusmarkwei/ghost-writer/main/install.sh | bash
+```
+
+**Install with Nano (simpler, no mode switching):**
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/juliusmarkwei/ghost-writer/nano/install.sh | bash
 ```
 
+**Install with VS Code (experimental, requires special settings):**
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/juliusmarkwei/ghost-writer/vs-code/install.sh | bash
+```
+
 **What this does:**
 
--   Downloads the latest version of GhostWriter
+-   Downloads the version for your chosen editor
 -   Installs it to your PATH (`/usr/local/bin` or `~/.local/bin`)
 -   Automatically installs all required dependencies:
     -   **Linux**: Installs `xdotool` via your package manager (apt, dnf, pacman, yum, zypper)
@@ -97,10 +108,10 @@ curl -fsSL https://raw.githubusercontent.com/juliusmarkwei/ghost-writer/nano/ins
 
 ### Manual Installation
 
-1. **Clone the repository (nano branch):**
+1. **Clone the repository:**
 
     ```bash
-    git clone -b nano https://github.com/juliusmarkwei/ghost-writer.git
+    git clone https://github.com/juliusmarkwei/ghost-writer.git
     cd ghost-writer
     ```
 
@@ -238,11 +249,12 @@ ghost-writer --source src/components/ --duration 120 --min-delay 80 --max-delay 
     - **Single file**: Types just that file
     - **Directory**: Processes all files recursively (excluding hidden files and `node_modules`)
 4. **Human-Like Typing Simulation**:
-    - Opens each file in Nano (in a new Terminal window)
+    - Opens each file in Vim (in a new Terminal window)
+    - Enters Insert mode and types line-by-line
     - **Context-aware typing**: Faster on whitespace, slower on special characters (150-500ms base delays)
     - **Smart pauses**: Automatically pauses before functions, classes, and other major constructs
     - **Typo simulation**: Occasional backspace/correction (~5% of characters)
-    - **Browser searches**: Periodically opens browser to search for relevant programming topics (~25% of pauses)
+    - **Browser searches**: Periodically opens browser to search for relevant programming topics with full interaction (~25% of pauses) - scrolls, clicks links, reads content, then minimizes
     - **Safety monitoring**: Continuously monitors mouse position and stops if movement detected
 5. **Looping**: After completing all files, waits briefly and restarts until duration expires
 
@@ -261,10 +273,10 @@ ghost-writer --source src/components/ --duration 120 --min-delay 80 --max-delay 
 
 **Prevents typing in wrong applications**:
 
--   Only types into Terminal/Nano and other safe applications
+-   Only types into Terminal/Vim and other safe applications
 -   Automatically refocuses your terminal if focus is lost
 -   Pauses if an unsafe application is active
--   Whitelist includes: Terminal, iTerm, Warp, Alacritty, Hyper, kitty, and other terminal emulators
+-   Whitelist includes: Terminal, iTerm, Warp, Alacritty, Hyper, kitty, vim, nvim, and other terminal emulators
 
 ### Graceful Cleanup
 
@@ -304,22 +316,22 @@ sudo pacman -S xdotool
 sudo zypper install xdotool
 ```
 
-### Nano: `nano: command not found`
+### Vim: `vim: command not found`
 
 **Solution:**
 
 **macOS:**
 
 ```bash
-brew install nano
+brew install vim
 ```
 
 **Linux:**
 
 ```bash
-sudo apt-get install nano  # Debian/Ubuntu
-sudo dnf install nano      # Fedora
-sudo pacman -S nano        # Arch
+sudo apt-get install vim  # Debian/Ubuntu
+sudo dnf install vim      # Fedora
+sudo pacman -S vim        # Arch
 ```
 
 ### Windows: Script won't run
@@ -360,7 +372,7 @@ ghost-writer --min-delay 300 --max-delay 600
 
 1. **Mouse moved**: Even slight touchpad touches trigger termination (this is intentional!)
 2. **Source file not found**: Check the error message and verify the path
-3. **Nano not installed**: The script needs Nano to be installed
+3. **Vim not installed**: The script needs Vim to be installed
 4. **Terminal not focused**: Make sure Terminal window is active when typing starts
 
 ### Permission errors during installation
