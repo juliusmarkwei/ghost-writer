@@ -134,6 +134,18 @@ Enable bash tracing for detailed execution logs:
 bash -x index.sh --duration 1
 ```
 
+### Git Commit Guidelines
+
+When creating commits for this project:
+
+**IMPORTANT:** Do NOT include "Co-Authored-By: Claude" or any AI assistant attribution in commit messages.
+
+- Write clear, descriptive commit messages
+- Use conventional commit format: `feat:`, `fix:`, `docs:`, `refactor:`, etc.
+- Include details about what changed and why
+- Keep commits focused on a single logical change
+- **Never** add co-author attribution for AI assistants
+
 ## Common Modification Scenarios
 
 ### Adding a New CLI Option
