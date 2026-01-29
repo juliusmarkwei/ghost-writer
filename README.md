@@ -1,5 +1,15 @@
 # GhostWriter
 
+> **📍 You are on the `vs-code` branch** - This version uses VS Code (experimental)
+>
+> ⚠️ **IMPORTANT:** This branch requires VS Code settings configuration (see Prerequisites below)
+>
+> **Other options:**
+> - **[`main`](https://github.com/juliusmarkwei/ghost-writer/tree/main)** - Vim (default, recommended)
+> - **[`nano`](https://github.com/juliusmarkwei/ghost-writer/tree/nano)** - Nano (simpler)
+>
+> See [BRANCHES.md](https://github.com/juliusmarkwei/ghost-writer/blob/main/BRANCHES.md) for comparison
+
 A cross-platform CLI tool that simulates a developer typing code in real-time with sophisticated human-like behavior. It reads source files from your project and "types" them into VS Code, complete with context-aware typing speeds, intelligent pauses, and even occasional typos—perfect for demonstrations, tutorials, or just having fun watching code write itself naturally.
 
 ## ✨ Features
@@ -81,10 +91,12 @@ A cross-platform CLI tool that simulates a developer typing code in real-time wi
 
 ### Quick Install (Recommended)
 
-Run this one-liner in your terminal to download and install `ghost-writer`:
+⚠️ **Before installing:** Make sure you've configured VS Code settings (see Prerequisites above)
+
+Run this one-liner in your terminal to download and install `ghost-writer` with VS Code:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/juliusmarkwei/ghost-writer/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/juliusmarkwei/ghost-writer/vs-code/install.sh | bash
 ```
 
 **What this does:**
@@ -100,10 +112,10 @@ curl -fsSL https://raw.githubusercontent.com/juliusmarkwei/ghost-writer/main/ins
 
 ### Manual Installation
 
-1. **Clone the repository:**
+1. **Clone the repository (vs-code branch):**
 
     ```bash
-    git clone https://github.com/juliusmarkwei/ghost-writer.git
+    git clone -b vs-code https://github.com/juliusmarkwei/ghost-writer.git
     cd ghost-writer
     ```
 
