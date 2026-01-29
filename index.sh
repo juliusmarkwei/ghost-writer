@@ -230,18 +230,18 @@ function check_dependencies {
         echo "✅  'osascript' found."
     fi
 
-    # Nano Requirement (All Platforms)
-    if ! command -v nano &> /dev/null; then
-        echo "❌  Error: 'nano' editor not found."
-        echo "    Please install nano:"
+    # Vim Requirement (All Platforms)
+    if ! command -v vim &> /dev/null; then
+        echo "❌  Error: 'vim' editor not found."
+        echo "    Please install vim:"
         if [[ "$OS_NAME" == "Darwin" ]]; then
-            echo "    brew install nano"
+            echo "    brew install vim"
         elif [[ "$OS_NAME" == "Linux" ]]; then
-            echo "    sudo apt-get install nano  (or equivalent for your distro)"
+            echo "    sudo apt-get install vim  (or equivalent for your distro)"
         fi
         exit 1
     fi
-    echo "✅  'nano' found."
+    echo "✅  'vim' found."
 }
 
 check_dependencies
@@ -347,31 +347,50 @@ fi
 SUBPROJECT_PATH="$ROOT_PATH/$SUBPROJECT_NAME"
 KNOWN_EDITOR_APP=""
 
-# Function to save the current file in Nano
+# Function to save the current file in Vim
 function save_file {
-    echo "💾 Saving file (Ctrl+O)..."
+    echo "💾 Saving file (:w)..."
 
     if [[ "$OS_NAME" == "Darwin" ]]; then
-        # macOS: Ctrl+O (WriteOut) then Enter to confirm
-        osascript -e 'tell application "System Events" to keystroke "o" using control down' 2>/dev/null
+        # macOS: Escape to normal mode, then :w to save
+        osascript -e 'tell application "System Events" to key code 53' 2>/dev/null  # Escape
         sleep 0.2
+        osascript -e 'tell application "System Events" to keystroke ":w"' 2>/dev/null
+        sleep 0.1
         osascript -e 'tell application "System Events" to key code 36' 2>/dev/null  # Enter
     elif [[ "$OS_NAME" == "Linux" ]]; then
-        # Linux: Ctrl+O then Enter
-        xdotool key ctrl+o
+        # Linux: Escape, :w, Enter
+        xdotool key Escape
         sleep 0.2
+        xdotool type ":w"
+        sleep 0.1
         xdotool key Return
     else
-        # Windows: Ctrl+O then Enter
+        # Windows: Escape, :w, Enter
         powershell.exe -Command "
             Add-Type -AssemblyName System.Windows.Forms
-            [System.Windows.Forms.SendKeys]::SendWait('^o')
+            [System.Windows.Forms.SendKeys]::SendWait('{ESC}')
             Start-Sleep -Milliseconds 200
+            [System.Windows.Forms.SendKeys]::SendWait(':w')
+            Start-Sleep -Milliseconds 100
             [System.Windows.Forms.SendKeys]::SendWait('{ENTER}')
         " > /dev/null 2>&1
     fi
 
     sleep 0.3
+
+    # Return to Insert mode for continued typing
+    if [[ "$OS_NAME" == "Darwin" ]]; then
+        osascript -e 'tell application "System Events" to keystroke "i"' 2>/dev/null
+    elif [[ "$OS_NAME" == "Linux" ]]; then
+        xdotool type "i"
+    else
+        powershell.exe -Command "
+            Add-Type -AssemblyName System.Windows.Forms
+            [System.Windows.Forms.SendKeys]::SendWait('i')
+        " > /dev/null 2>&1
+    fi
+    sleep 0.2
 }
 
 
@@ -828,9 +847,9 @@ function cleanup {
 
 trap cleanup SIGINT SIGTERM
 
-# Nano doesn't need a workspace opened - files are opened individually
+# Vim doesn't need a workspace opened - files are opened individually
 function open_editor_workspace {
-    echo "📂 Ready to open files in Nano..."
+    echo "📂 Ready to open files in Vim..."
     echo "   (Each file will open in a new Terminal window)"
 }
 
@@ -858,15 +877,15 @@ function simulate_typing_session {
     echo "✅ File created: $target_file"
 
     echo ""
-    echo "STEP 2: Opening in Nano..."
+    echo "STEP 2: Opening in Vim..."
 
-    # Open file in Nano (in a new Terminal window)
+    # Open file in Vim (in a new Terminal window)
     if [[ "$OS_NAME" == "Darwin" ]]; then
-        # macOS: Open nano in a new Terminal window and maximize it
-        osascript -e "tell application \"Terminal\" to do script \"nano '$target_file'\"" 2>/dev/null
+        # macOS: Open vim in a new Terminal window and maximize it
+        osascript -e "tell application \"Terminal\" to do script \"vim '$target_file'\"" 2>/dev/null
         osascript -e 'tell application "Terminal" to activate' 2>/dev/null
         sleep 0.5
-        # Maximize the Terminal window
+        # Maximize the Terminal window (enter full screen)
         osascript -e '
             tell application "System Events"
                 tell process "Terminal"
@@ -876,27 +895,29 @@ function simulate_typing_session {
                 end tell
             end tell
         ' 2>/dev/null
+        # Alternative: Enter actual full screen mode (Ctrl+Cmd+F)
+        osascript -e 'tell application "System Events" to key code 3 using {control down, command down}' 2>/dev/null
     elif [[ "$OS_NAME" == "Linux" ]]; then
-        # Linux: Open nano in a new terminal (try common terminal emulators) with maximize
+        # Linux: Open vim in a new terminal (try common terminal emulators) with maximize
         if command -v gnome-terminal &> /dev/null; then
-            gnome-terminal --maximize -- nano "$target_file" &
+            gnome-terminal --maximize -- vim "$target_file" &
         elif command -v xterm &> /dev/null; then
-            xterm -maximized -e nano "$target_file" &
+            xterm -maximized -e vim "$target_file" &
         else
-            echo "⚠️  Please open nano manually: nano $target_file"
+            echo "⚠️  Please open vim manually: vim $target_file"
         fi
     else
-        # Windows: Open nano via Git Bash / WSL (maximized)
-        start /max bash -c "nano '$target_file'" 2>/dev/null || echo "Please open nano manually: nano $target_file"
+        # Windows: Open vim via Git Bash / WSL (maximized)
+        start /max bash -c "vim '$target_file'" 2>/dev/null || echo "Please open vim manually: vim $target_file"
     fi
 
     echo ""
-    echo "STEP 3: Waiting for you to focus Nano..."
+    echo "STEP 3: Waiting for you to focus Vim..."
     if [[ "$is_first_file" == "true" ]]; then
-        echo "⏳ Please click on the Terminal/Nano window (5 seconds)..."
+        echo "⏳ Please click on the Terminal/Vim window (5 seconds)..."
         sleep 5
     else
-        echo "⏳ Please click on the Terminal/Nano window (3 seconds)..."
+        echo "⏳ Please click on the Terminal/Vim window (3 seconds)..."
         sleep 3
     fi
 
@@ -905,8 +926,21 @@ function simulate_typing_session {
     wait_for_safe_focus
 
     echo ""
-    echo "STEP 5: Starting to type!"
+    echo "STEP 5: Entering Insert mode and starting to type!"
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+    # Enter Insert mode in Vim (press 'i')
+    if [[ "$OS_NAME" == "Darwin" ]]; then
+        osascript -e 'tell application "System Events" to keystroke "i"' 2>/dev/null
+    elif [[ "$OS_NAME" == "Linux" ]]; then
+        xdotool type "i"
+    else
+        powershell.exe -Command "
+            Add-Type -AssemblyName System.Windows.Forms
+            [System.Windows.Forms.SendKeys]::SendWait('i')
+        " > /dev/null 2>&1
+    fi
+    sleep 0.3
 
     # Start mouse monitor if not already active
     if [[ "$MOUSE_MONITOR_ACTIVE" == "false" ]]; then
@@ -1037,7 +1071,7 @@ function main_loop {
             echo "❌ ERROR: No files were successfully typed in this cycle!"
             echo "❌ This usually means:"
             echo "   1. The typing function encountered an error"
-            echo "   2. Terminal/Nano is not properly focused"
+            echo "   2. Terminal/Vim is not properly focused"
             echo "   3. Permissions are not granted (macOS Accessibility)"
             echo ""
             echo "Stopping to prevent infinite loop..."
@@ -1079,7 +1113,7 @@ INITIAL_MOUSE=$(get_mouse_pos)
 echo "📍 Initial mouse position: $INITIAL_MOUSE"
 echo ""
 
-# Initialize editor (Nano opens files individually, so just print info)
+# Initialize editor (Vim opens files individually, so just print info)
 open_editor_workspace
 
 # Run the main loop
