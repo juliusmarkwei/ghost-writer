@@ -354,30 +354,31 @@ function save_file {
     if [[ "$OS_NAME" == "Darwin" ]]; then
         # macOS: Escape to normal mode, then :w to save
         osascript -e 'tell application "System Events" to key code 53' 2>/dev/null  # Escape
-        sleep 0.2
+        sleep 0.3
         osascript -e 'tell application "System Events" to keystroke ":w"' 2>/dev/null
-        sleep 0.1
+        sleep 0.2
         osascript -e 'tell application "System Events" to key code 36' 2>/dev/null  # Enter
     elif [[ "$OS_NAME" == "Linux" ]]; then
         # Linux: Escape, :w, Enter
         xdotool key Escape
-        sleep 0.2
+        sleep 0.3
         xdotool type ":w"
-        sleep 0.1
+        sleep 0.2
         xdotool key Return
     else
         # Windows: Escape, :w, Enter
         powershell.exe -Command "
             Add-Type -AssemblyName System.Windows.Forms
             [System.Windows.Forms.SendKeys]::SendWait('{ESC}')
-            Start-Sleep -Milliseconds 200
+            Start-Sleep -Milliseconds 300
             [System.Windows.Forms.SendKeys]::SendWait(':w')
-            Start-Sleep -Milliseconds 100
+            Start-Sleep -Milliseconds 200
             [System.Windows.Forms.SendKeys]::SendWait('{ENTER}')
         " > /dev/null 2>&1
     fi
 
-    sleep 0.3
+    # Wait longer for Vim to finish showing the save message
+    sleep 0.5
 
     # Return to Insert mode for continued typing
     if [[ "$OS_NAME" == "Darwin" ]]; then
@@ -390,7 +391,8 @@ function save_file {
             [System.Windows.Forms.SendKeys]::SendWait('i')
         " > /dev/null 2>&1
     fi
-    sleep 0.2
+    # Wait longer after re-entering Insert mode to ensure it's ready
+    sleep 0.4
 }
 
 # Function to activate browser window (uses frontmost app - respects user's default browser)
@@ -940,7 +942,8 @@ function simulate_typing_session {
             [System.Windows.Forms.SendKeys]::SendWait('i')
         " > /dev/null 2>&1
     fi
-    sleep 0.3
+    # Wait longer to ensure Insert mode is fully active
+    sleep 0.5
 
     # Start mouse monitor if not already active
     if [[ "$MOUSE_MONITOR_ACTIVE" == "false" ]]; then
