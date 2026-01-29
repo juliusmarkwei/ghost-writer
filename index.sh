@@ -965,15 +965,6 @@ function simulate_typing_session {
 
         line_count=$((line_count + 1))
 
-        # Check if 20 seconds have passed since last save
-        local current_time=$(date +%s)
-        local time_since_save=$((current_time - last_save_time))
-
-        if [[ "$time_since_save" -ge 20 ]]; then
-            save_file
-            last_save_time=$(date +%s)
-        fi
-
         # Check focus before typing each line
         wait_for_safe_focus
 
