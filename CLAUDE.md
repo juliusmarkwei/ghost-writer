@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-GhostWriter is a cross-platform CLI tool that simulates a developer typing code in real-time within Vim with sophisticated human-like behavior. It reads source files and "types" them character-by-character with context-aware delays (150-500ms base range), intelligent pauses at natural breakpoints, occasional typo simulation, browser search integration for realistic research behavior, and safety features like mouse movement detection and focus management.
+GhostWriter is a cross-platform CLI tool that simulates a developer typing code in real-time within Vim with sophisticated human-like behavior. It reads source files and "types" them character-by-character with context-aware delays (150-500ms base range), intelligent pauses at natural breakpoints, occasional typo simulation, and safety features like mouse movement detection and focus management.
 
 The tool is designed for live coding demos, tutorial videos, and educational content where code needs to appear as if being typed naturally by a real developer.
 
@@ -17,7 +17,7 @@ This is the single executable bash script that contains the entire application l
 1. **Configuration & Defaults** (lines 1-122): Defines runtime parameters and embeds a comprehensive TypeScript test source that's used when no source file is found
 2. **CLI Parsing** (lines 125-158): Handles command-line arguments using bash case statements
 3. **Project Detection** (lines 163-177): Walks up directory tree to find `package.json` for project root
-4. **OS Detection & Dependencies** (lines 179-245): Identifies OS (macOS/Linux/Windows) and validates required tools (xdotool, osascript, PowerShell, VS Code)
+4. **OS Detection & Dependencies** (lines 179-245): Identifies OS (macOS/Linux/Windows) and validates required tools (xdotool, osascript, PowerShell, Vim)
 5. **Source Path Resolution** (lines 253-360): Intelligent source handling with dynamic auto-detection:
    - User-specified paths (absolute or relative)
    - Multi-level search strategy:
@@ -30,23 +30,14 @@ This is the single executable bash script that contains the entire application l
    - **macOS**: `osascript` with AppleScript to send keystrokes
    - **Linux**: `xdotool` for X11 keyboard simulation
    - **Windows**: PowerShell's `System.Windows.Forms.SendKeys`
-7. **VS Code Integration** (lines 377-395): `handle_vscode_char()` function manages auto-complete by detecting opening brackets/quotes and deleting auto-completed closing characters
-8. **Browser Search Integration** (lines 410-580): Realistic developer research behavior with full interaction:
-   - `activate_browser()`: Focuses browser window (respects user's default browser)
-   - `scroll_page()`: Scrolls down with random delays to simulate reading
-   - `click_first_link()`: Presses Tab+Enter to click first search result
-   - `minimize_browser()`: Minimizes browser window after reading
-   - `open_browser_search()`: Orchestrates full browsing session (search → scroll results → click link → scroll article → read 3-7s → minimize → refocus editor)
-   - `generate_contextual_search()`: Creates relevant search queries based on code context
-   - `should_trigger_browser_search()`: Probabilistic triggering with cooldown mechanism
-9. **Human-Like Typing System** (lines 490-680): Sophisticated typing behavior including:
+7. **Human-Like Typing System**: Sophisticated typing behavior including:
    - `calculate_typing_delay()`: Context-aware speed (fast on whitespace, slow on special chars)
    - `should_pause_before_line()`: Detects natural pause points (functions, classes, etc.)
    - `execute_pause()`: Executes pauses with appropriate durations
    - `simulate_typo()`: Occasional typos with backspace and correction
-10. **Safety Systems** (lines 680-820): Mouse movement detection and focus management to prevent typing in wrong applications
-11. **File Processing & Vim Integration** (lines 850-1000): Opens files in Vim, enters Insert mode, types content line-by-line with human-like behavior and browser searches, saves periodically
-12. **Main Loop** (lines 1000-1120): Cycles through files repeatedly until duration expires, with cleanup between cycles
+8. **Safety Systems**: Mouse movement detection and focus management to prevent typing in wrong applications
+9. **File Processing & Vim Integration**: Opens files in Vim, enters Insert mode once, types entire file, saves only at the end
+10. **Main Loop**: Cycles through files repeatedly until duration expires, with cleanup between cycles
 
 ### Key Design Patterns
 
@@ -58,12 +49,12 @@ This is the single executable bash script that contains the entire application l
 
 **Safety-First Design**: The tool continuously monitors mouse position and active window focus, immediately terminating if the user moves their mouse or if typing would occur in an unsafe application.
 
-**VS Code Workflow**: The tool integrates with VS Code by:
-1. Opening files with `code -r` to reuse existing window
-2. Activating and maximizing the VS Code window
-3. Typing content with human-like behavior (context-aware delays, smart pauses, typos)
-4. Handling VS Code's auto-complete by deleting auto-completed closing characters
-5. Periodically saving with Cmd/Ctrl+S (no mode switching needed)
+**Vim Workflow**: The tool integrates with Vim by:
+1. Opening files in a new Terminal window with Vim
+2. Entering Insert mode once at the start
+3. Typing entire file with human-like behavior (context-aware delays, smart pauses, typos)
+4. Never exiting Insert mode during typing (no periodic saves)
+5. Only saving once at the very end with :w
 
 ## Installation Script: `install.sh`
 
@@ -86,22 +77,16 @@ Uses platform-native APIs wrapped in helper functions:
 - **Linux**: xdotool getmouselocation
 - **Windows**: PowerShell System.Windows.Forms.Cursor API
 
-### 3. VS Code Integration & Human-Like Typing
-The tool targets VS Code with sophisticated human-like behavior:
-- **Auto-Complete Handling**: Detects VS Code's auto-completed brackets/quotes and removes them to prevent duplication
+### 3. Vim Integration & Human-Like Typing
+The tool targets Vim with sophisticated human-like behavior:
+- **Modal Editing**: Enters Insert mode once at start, stays in Insert mode for entire file
 - **Context-Aware Speed**: Types faster on whitespace (2x), slower on special characters (+30-50ms)
 - **Smart Pauses**: Automatically pauses before major constructs (functions, classes, imports) with appropriate durations
 - **Typo Simulation**: Randomly introduces typos (~5% chance) with realistic backspace and correction
-- **Window Management**: Uses `code -r` for window reuse and platform-specific activation/maximization
+- **No Periodic Saves**: Types entire file without interruption, saves only at the end
 
 ### 4. Special Character Escaping
 AppleScript on macOS requires careful escaping of quotes, backslashes, and dollar signs. The `type_char` function handles these as special cases using specific AppleScript syntax patterns.
-
-### 5. VS Code Window Maximization
-The script maximizes the VS Code window to provide a better demo experience:
-- **macOS**: Uses AppleScript to activate "Visual Studio Code" and set window position/size
-- **Linux**: Uses `wmctrl` or `xdotool` to activate and maximize window
-- **Windows**: Uses PowerShell to send Win+Up key to maximize window
 
 ## Development Workflow
 
@@ -154,22 +139,12 @@ When creating commits for this project:
 2. Add case statement in argument parsing loop (lines 147-157)
 3. Update `show_help()` function (lines 125-143)
 
-### Supporting a New Editor
-
-To add support for editors beyond VS Code:
-
-1. Update file opening logic in `simulate_typing_session()` to launch the new editor
-2. Update `is_safe_app()` whitelist to include the editor's process name
-3. Adjust `handle_vscode_char()` or create new function to handle editor-specific auto-complete behavior
-
 ### Adjusting Typing Behavior
 
 - **Base Speed**: Modify `MIN_DELAY_MS` and `MAX_DELAY_MS` defaults (lines 5-6, currently 150-500ms)
 - **Context Multipliers**: Adjust whitespace (2x faster) and special char slowdown (+30-50ms) in `calculate_typing_delay()`
 - **Smart Pauses**: Modify pause durations in `execute_pause()` (long: 1.5-4s, medium: 0.8-2s, short: 0.3-0.8s, micro: 0.1-0.3s)
 - **Typo Frequency**: Change the 5% chance in `simulate_typo()` (currently `RANDOM % 20 != 0`)
-- **Save Frequency**: Change the 20-second interval check in main typing loop
-- **Browser Search Frequency**: Adjust `BROWSER_SEARCH_FREQUENCY` (default 25%) or `SEARCH_COOLDOWN` (default 60s) in lines 10-14
 
 ### Platform-Specific Fixes
 
@@ -183,10 +158,10 @@ Example: To fix a macOS keystroke issue, modify the `"Darwin"` branch in `type_c
 ## Important Constraints
 
 1. **Single File Architecture**: The entire application is in `index.sh` to simplify distribution (users get one file)
-2. **No External Dependencies** (except platform tools): The script only relies on OS-native tools and doesn't require npm, pip, or other package managers (beyond VS Code itself)
-3. **VS Code-Specific**: The typing simulation is optimized for VS Code's behavior (auto-complete handling, Cmd/Ctrl+S saves, window management)
+2. **No External Dependencies** (except platform tools): The script only relies on OS-native tools and doesn't require npm, pip, or other package managers (beyond Vim itself)
+3. **Vim-Specific**: The typing simulation is optimized for Vim's modal editing (stays in Insert mode throughout)
 4. **Line-by-Line Processing**: Files are typed line-by-line with intelligent pauses at natural breakpoints (functions, classes, etc.)
-5. **GUI-Based Typing**: Types into VS Code GUI application with proper window management and focus detection
+5. **Terminal-Based Typing**: Types into Vim in Terminal with proper window management and focus detection
 
 ## Project Structure
 
@@ -212,13 +187,8 @@ The tool implements multiple safety mechanisms:
 
 - `DURATION_MINUTES`: How long to run the simulation
 - `MIN_DELAY_MS` / `MAX_DELAY_MS`: Base typing speed range (default 150-500ms, modified by context-aware system)
-- `ENABLE_BROWSER_SEARCH`: Enable/disable browser search feature (default: true)
-- `BROWSER_SEARCH_FREQUENCY`: Probability percentage for triggering searches (default: 25)
-- `LAST_SEARCH_TIME`: Unix timestamp of last browser search (for cooldown tracking)
-- `SEARCH_COOLDOWN`: Minimum seconds between searches (default: 60)
 - `SOURCE_PATH`: Absolute path to source file or directory
 - `SUBPROJECT_PATH`: Where temporary simulation files are created
 - `MOUSE_MONITOR_PID`: PID of background mouse monitoring process
-- `KNOWN_EDITOR_APP`: Name of the safe editor application currently in focus (typically Terminal/Vim)
+- `KNOWN_EDITOR_APP`: Name of the safe editor application currently in focus (typically Terminal)
 - `FIRST_CYCLE`: Boolean flag to track if this is the first run (affects wait times)
-- `last_save_time`: Timestamp of last file save in Vim (for periodic auto-save with :w)
