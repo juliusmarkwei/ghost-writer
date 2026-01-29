@@ -546,8 +546,8 @@ function open_browser_search {
 
     # Step 10: Refocus editor
     echo "   🔄 Refocusing editor..."
-    refocus_app
-    sleep 0.5
+    refocus_app "$KNOWN_EDITOR_APP"
+    sleep 1
 
     # Step 11: Ensure we're back in Insert mode in Vim
     # First press Escape to ensure we're in Normal mode, then 'i' to enter Insert mode
