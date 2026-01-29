@@ -31,8 +31,12 @@ This is the single executable bash script that contains the entire application l
    - **Linux**: `xdotool` for X11 keyboard simulation
    - **Windows**: PowerShell's `System.Windows.Forms.SendKeys`
 7. **VS Code Integration** (lines 377-395): `handle_vscode_char()` function manages auto-complete by detecting opening brackets/quotes and deleting auto-completed closing characters
-8. **Browser Search Integration** (lines 402-490): Realistic developer research behavior:
-   - `open_browser_search()`: Platform-specific browser opening (open/xdg-open/PowerShell)
+8. **Browser Search Integration** (lines 410-580): Realistic developer research behavior with full interaction:
+   - `activate_browser()`: Focuses browser window (Chrome, Safari, Firefox, Edge)
+   - `scroll_page()`: Scrolls down with random delays to simulate reading
+   - `click_first_link()`: Presses Tab+Enter to click first search result
+   - `minimize_browser()`: Minimizes browser window after reading
+   - `open_browser_search()`: Orchestrates full browsing session (search → scroll results → click link → scroll article → read 3-7s → minimize → refocus editor)
    - `generate_contextual_search()`: Creates relevant search queries based on code context
    - `should_trigger_browser_search()`: Probabilistic triggering with cooldown mechanism
 9. **Human-Like Typing System** (lines 490-680): Sophisticated typing behavior including:

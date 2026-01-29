@@ -24,10 +24,12 @@ A cross-platform CLI tool that simulates a developer typing code in real-time wi
     -   Types 2-4 characters, realizes "mistake", pauses briefly
     -   Backtracks and retypes correctly
     -   Never breaks code structure (only in safe zones)
--   **Browser Search Integration**: Periodically opens browser to search for programming topics
+-   **Browser Search Integration**: Periodically opens browser to search for programming topics with realistic interaction
     -   Contextual searches based on what's being typed (functions, classes, imports)
+    -   **Realistic browsing behavior**: Opens search → scrolls results (2-4 times) → clicks first link → scrolls article (4-7 times) → reads for 3-7s → minimizes browser → refocuses editor
     -   Triggers at natural pause points (~25% of long/medium pauses)
     -   Respects 60-second cooldown to avoid spam
+    -   Total interaction time: 12-22 seconds per search
     -   Enabled by default (can be disabled with `--disable-browser-search`)
 
 ### 🛡️ Safety & Control
@@ -252,7 +254,7 @@ ghost-writer --source src/components/ --duration 120 --min-delay 80 --max-delay 
     - **Context-aware typing**: Faster on whitespace, slower on special characters (150-500ms base delays)
     - **Smart pauses**: Automatically pauses before functions, classes, and other major constructs
     - **Typo simulation**: Occasional backspace/correction (~5% of characters)
-    - **Browser searches**: Periodically opens browser to search for relevant programming topics (~25% of pauses)
+    - **Browser searches**: Periodically opens browser to search for relevant programming topics with full interaction (~25% of pauses) - scrolls, clicks links, reads content, then minimizes
     - **Safety monitoring**: Continuously monitors mouse position and stops if movement detected
 5. **Looping**: After completing all files, waits briefly and restarts until duration expires
 
