@@ -164,7 +164,7 @@ if ! command -v code &> /dev/null; then
         echo "    3. Or add VS Code's bin folder to your PATH manually"
     fi
     echo ""
-    echo "    GhostWriter requires VS Code to function."
+    echo "    GhostWriter (VS Code version) requires VS Code to function."
 else
     echo "✅  VS Code 'code' command found."
 fi
