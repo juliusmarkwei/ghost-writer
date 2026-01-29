@@ -8,12 +8,6 @@ SUBPROJECT_NAME="simulation-subproject"
 SOURCE_FILE_RELATIVE=""
 MOUSE_MONITOR_ACTIVE=false
 
-# Browser Search Configuration
-ENABLE_BROWSER_SEARCH=true
-BROWSER_SEARCH_FREQUENCY=25
-LAST_SEARCH_TIME=0
-SEARCH_COOLDOWN=60
-
 # Embedded Comprehensive Source (TypeScript)
 read -r -d '' DEFAULT_CONTENT << 'EOF'
 interface VoidConfig {
@@ -137,16 +131,11 @@ function show_help {
     echo "  --max-delay <ms>          Maximum delay between keystrokes (default: 500)"
     echo "  --name <name>             Name of subproject (default: simulation-subproject)"
     echo "  --source <path>           Relative or absolute path to source file/directory"
-    echo "  --enable-browser-search   Enable browser search feature (default)"
-    echo "  --disable-browser-search  Disable browser search feature"
-    echo "  --search-frequency <n>    Search trigger probability % (default: 25)"
     echo "  -h, --help                Show this help message"
     echo ""
     echo "Examples:"
     echo "  ghost-writer --duration 60                      # Run for 1 hour with default source"
     echo "  ghost-writer --min-delay 50 --max-delay 150     # Type faster"
-    echo "  ghost-writer --disable-browser-search           # Disable browser searches"
-    echo "  ghost-writer --search-frequency 50              # More frequent searches (50%)"
     echo "  ghost-writer --name my-project                  # Custom subproject name"
     echo "  ghost-writer --source src/utils.ts              # Type a specific file"
     echo "  ghost-writer --source src/                      # Process all files in directory"
@@ -162,9 +151,6 @@ while [[ "$#" -gt 0 ]]; do
         --max-delay) MAX_DELAY_MS="$2"; shift ;;
         --name) SUBPROJECT_NAME="$2"; shift ;;
         --source) SOURCE_FILE_RELATIVE="$2"; USER_PROVIDED_SOURCE=true; shift ;;
-        --enable-browser-search) ENABLE_BROWSER_SEARCH="true" ;;
-        --disable-browser-search) ENABLE_BROWSER_SEARCH="false" ;;
-        --search-frequency) BROWSER_SEARCH_FREQUENCY="$2"; shift ;;
         -h|--help) show_help ;;
         *) echo "Unknown parameter passed: $1"; exit 1 ;;
     esac
@@ -408,238 +394,6 @@ function save_file {
 }
 
 # Function to activate browser window (uses frontmost app - respects user's default browser)
-function activate_browser {
-    if [[ "$OS_NAME" == "Darwin" ]]; then
-        # On macOS, 'open' command already brings browser to front
-        # Just ensure it's activated (this activates whatever browser opened the URL)
-        osascript -e 'tell application "System Events" to set frontmost of first process whose frontmost is true to true' 2>/dev/null
-    elif [[ "$OS_NAME" == "Linux" ]]; then
-        # On Linux, activate the most recently active window (likely the browser)
-        xdotool windowactivate $(xdotool getactivewindow) 2>/dev/null
-    else
-        # Windows - Alt+Tab to ensure browser is active
-        powershell.exe -Command "
-            Add-Type -AssemblyName System.Windows.Forms
-            [System.Windows.Forms.SendKeys]::SendWait('%{TAB}')
-        " > /dev/null 2>&1
-    fi
-}
-
-# Function to scroll page slowly (simulate reading)
-function scroll_page {
-    local num_scrolls="$1"
-
-    for (( i=0; i<num_scrolls; i++ )); do
-        if [[ "$OS_NAME" == "Darwin" ]]; then
-            # Scroll down using down arrow or space
-            osascript -e 'tell application "System Events" to key code 125' 2>/dev/null  # Down arrow
-        elif [[ "$OS_NAME" == "Linux" ]]; then
-            xdotool key Down 2>/dev/null
-        else
-            powershell.exe -Command "
-                Add-Type -AssemblyName System.Windows.Forms
-                [System.Windows.Forms.SendKeys]::SendWait('{DOWN}')
-            " > /dev/null 2>&1
-        fi
-
-        # Random delay between scrolls (0.3-0.8s) - simulates reading
-        local delay=$(awk "BEGIN {print (0.3 + rand() * 0.5)}")
-        sleep "$delay"
-    done
-}
-
-# Function to click first search result (press Enter or Tab+Enter)
-function click_first_link {
-    echo "   🖱️  Clicking first search result..."
-
-    # Small delay before clicking
-    sleep 0.5
-
-    if [[ "$OS_NAME" == "Darwin" ]]; then
-        # Press Tab to focus first link, then Enter to click
-        osascript -e 'tell application "System Events" to keystroke tab' 2>/dev/null
-        sleep 0.3
-        osascript -e 'tell application "System Events" to keystroke return' 2>/dev/null
-    elif [[ "$OS_NAME" == "Linux" ]]; then
-        xdotool key Tab 2>/dev/null
-        sleep 0.3
-        xdotool key Return 2>/dev/null
-    else
-        powershell.exe -Command "
-            Add-Type -AssemblyName System.Windows.Forms
-            [System.Windows.Forms.SendKeys]::SendWait('{TAB}')
-            Start-Sleep -Milliseconds 300
-            [System.Windows.Forms.SendKeys]::SendWait('{ENTER}')
-        " > /dev/null 2>&1
-    fi
-}
-
-# Function to minimize or close browser
-function minimize_browser {
-    echo "   ↙️  Minimizing browser..."
-
-    if [[ "$OS_NAME" == "Darwin" ]]; then
-        # Cmd+M to minimize window
-        osascript -e 'tell application "System Events" to keystroke "m" using command down' 2>/dev/null
-    elif [[ "$OS_NAME" == "Linux" ]]; then
-        # Minimize active window
-        xdotool getactivewindow windowminimize 2>/dev/null
-    else
-        # Windows - Minimize window
-        powershell.exe -Command "
-            Add-Type -AssemblyName System.Windows.Forms
-            [System.Windows.Forms.SendKeys]::SendWait('%{F9}')
-        " > /dev/null 2>&1
-    fi
-}
-
-# Function to open browser with search query and simulate realistic interaction
-function open_browser_search {
-    local query="$1"
-    local encoded_query=$(echo "$query" | sed 's/ /+/g')
-    local search_url="https://www.google.com/search?q=$encoded_query"
-
-    echo "🔍  Opening browser: '$query'"
-
-    # Step 1: Open browser with search
-    if [[ "$OS_NAME" == "Darwin" ]]; then
-        open "$search_url" 2>/dev/null &
-    elif [[ "$OS_NAME" == "Linux" ]]; then
-        xdg-open "$search_url" 2>/dev/null &
-    else
-        powershell.exe -Command "Start-Process '$search_url'" > /dev/null 2>&1 &
-    fi
-
-    # Step 2: Wait for browser to open and page to load
-    echo "   ⏳ Waiting for page to load..."
-    sleep 3
-
-    # Step 3: Activate browser window
-    activate_browser
-    sleep 0.5
-
-    # Step 4: Scroll search results (simulate reading results)
-    echo "   📜 Scrolling search results..."
-    local search_scrolls=$((2 + RANDOM % 3))  # 2-4 scrolls
-    scroll_page "$search_scrolls"
-
-    # Step 5: Click on first search result
-    click_first_link
-
-    # Step 6: Wait for article/documentation page to load
-    echo "   ⏳ Loading article..."
-    sleep 2
-
-    # Step 7: Scroll article (simulate reading content)
-    echo "   📖 Reading content..."
-    local article_scrolls=$((4 + RANDOM % 4))  # 4-7 scrolls
-    scroll_page "$article_scrolls"
-
-    # Step 8: Stay on page simulating reading time
-    local reading_time=$((3 + RANDOM % 5))  # 3-7 additional seconds
-    echo "   👀 Reading for ${reading_time}s..."
-    sleep "$reading_time"
-
-    # Step 9: Minimize browser
-    minimize_browser
-    sleep 0.5
-
-    # Step 10: Refocus editor
-    echo "   🔄 Refocusing editor..."
-    refocus_app "$KNOWN_EDITOR_APP"
-    sleep 1
-
-    # Step 11: Ensure we're back in Insert mode in Vim
-    # First press Escape to ensure we're in Normal mode, then 'i' to enter Insert mode
-    if [[ "$OS_NAME" == "Darwin" ]]; then
-        osascript -e 'tell application "System Events" to key code 53' 2>/dev/null  # Escape
-        sleep 0.2
-        osascript -e 'tell application "System Events" to keystroke "i"' 2>/dev/null
-    elif [[ "$OS_NAME" == "Linux" ]]; then
-        xdotool key Escape
-        sleep 0.2
-        xdotool type "i"
-    else
-        powershell.exe -Command "
-            Add-Type -AssemblyName System.Windows.Forms
-            [System.Windows.Forms.SendKeys]::SendWait('{ESC}')
-            Start-Sleep -Milliseconds 200
-            [System.Windows.Forms.SendKeys]::SendWait('i')
-        " > /dev/null 2>&1
-    fi
-    sleep 0.3
-}
-
-# Function to generate contextual search queries
-function generate_contextual_search {
-    local source_file="$1"
-    local current_line="$2"
-
-    # Detect language from file extension
-    local ext="${source_file##*.}"
-    local language=""
-    case "$ext" in
-        ts|tsx) language="TypeScript" ;;
-        js|jsx) language="JavaScript" ;;
-        py) language="Python" ;;
-        go) language="Go" ;;
-        rs) language="Rust" ;;
-        *) language="Programming" ;;
-    esac
-
-    # Extract context from current line if available
-    if [[ "$current_line" =~ function[[:space:]]+([a-zA-Z_][a-zA-Z0-9_]*) ]]; then
-        echo "$language function ${BASH_REMATCH[1]} best practices"
-    elif [[ "$current_line" =~ class[[:space:]]+([a-zA-Z_][a-zA-Z0-9_]*) ]]; then
-        echo "$language class design patterns"
-    elif [[ "$current_line" =~ import.*from[[:space:]]+[\'\"]([a-zA-Z0-9@/-]+) ]]; then
-        echo "${BASH_REMATCH[1]} documentation"
-    else
-        # Fallback to generic contextual searches
-        local SEARCH_QUERIES=(
-            "$language best practices 2025"
-            "$language performance optimization"
-            "$language design patterns"
-            "$language error handling"
-            "$language testing framework"
-            "clean code principles $language"
-        )
-        local random_idx=$((RANDOM % ${#SEARCH_QUERIES[@]}))
-        echo "${SEARCH_QUERIES[$random_idx]}"
-    fi
-}
-
-# Function to determine if browser search should be triggered
-function should_trigger_browser_search {
-    local pause_type="$1"
-
-    # Check if feature enabled
-    [[ "$ENABLE_BROWSER_SEARCH" != "true" ]] && return 1
-
-    # Check cooldown (avoid spam)
-    local current_time=$(date +%s)
-    local time_since_last=$((current_time - LAST_SEARCH_TIME))
-    [[ $time_since_last -lt $SEARCH_COOLDOWN ]] && return 1
-
-    # Trigger on long or medium pauses with configured probability
-    case "$pause_type" in
-        long)
-            # Higher chance during long pauses (before functions/classes)
-            if (( RANDOM % 100 < BROWSER_SEARCH_FREQUENCY * 2 )); then
-                return 0
-            fi
-            ;;
-        medium)
-            # Normal chance during medium pauses
-            if (( RANDOM % 100 < BROWSER_SEARCH_FREQUENCY )); then
-                return 0
-            fi
-            ;;
-    esac
-
-    return 1
-}
-
 # Function to send forward delete (to remove auto-completed closing chars)
 function send_forward_delete {
     local count="${1:-1}"
@@ -887,17 +641,7 @@ function type_text {
     # Check for pause before line
     local pause_type=$(should_pause_before_line "$line" "$prev_line" "$line_number")
     if [[ "$pause_type" != "none" ]]; then
-        # Check if should trigger browser search
-        if should_trigger_browser_search "$pause_type"; then
-            local search_term=$(generate_contextual_search "$source_file" "$line")
-            open_browser_search "$search_term"
-            LAST_SEARCH_TIME=$(date +%s)
-            # Execute shorter pause after browser opens
-            execute_pause "short" "$line"
-        else
-            # Normal pause without browser
-            execute_pause "$pause_type" "$line"
-        fi
+        execute_pause "$pause_type" "$line"
     fi
 
     local len=${#line}
