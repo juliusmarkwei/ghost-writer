@@ -142,31 +142,26 @@ else
     fi
 fi
 
-# Check VS Code (all platforms)
+# Check Vim (all platforms)
 echo ""
-echo "🔍  Checking VS Code..."
-if ! command -v code &> /dev/null; then
-    echo "⚠️  VS Code command 'code' not found in PATH."
+echo "🔍  Checking Vim..."
+if ! command -v vim &> /dev/null; then
+    echo "⚠️  Vim not found in PATH."
     echo ""
-    echo "    Please install VS Code and add 'code' to your PATH:"
+    echo "    Please install Vim:"
     if [[ "$OS_NAME" == "Darwin" ]]; then
-        echo "    1. Install VS Code from: https://code.visualstudio.com/"
-        echo "    2. Open VS Code"
-        echo "    3. Press Cmd+Shift+P"
-        echo "    4. Type: 'Shell Command: Install code command in PATH'"
+        echo "    brew install vim"
     elif [[ "$OS_NAME" == "Linux" ]]; then
-        echo "    1. Install VS Code from: https://code.visualstudio.com/"
-        echo "    2. The 'code' command should be automatically added to PATH"
-        echo "    3. If not, add it manually or reinstall VS Code"
+        echo "    - Debian/Ubuntu: sudo apt-get install vim"
+        echo "    - Fedora: sudo dnf install vim"
+        echo "    - Arch: sudo pacman -S vim"
     else
-        echo "    1. Install VS Code from: https://code.visualstudio.com/"
-        echo "    2. During installation, check 'Add to PATH'"
-        echo "    3. Or add VS Code's bin folder to your PATH manually"
+        echo "    Install Vim via Git Bash or WSL"
     fi
     echo ""
-    echo "    GhostWriter requires VS Code to function."
+    echo "    GhostWriter (Vim version) requires Vim to function."
 else
-    echo "✅  VS Code 'code' command found."
+    echo "✅  Vim found."
 fi
 
 echo ""
