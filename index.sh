@@ -528,7 +528,7 @@ function open_browser_search {
     # Step 10: Refocus editor
     echo "   🔄 Refocusing editor..."
     refocus_app
-    sleep 0.5
+    sleep 1  # Longer sleep to ensure Nano is ready to receive keystrokes
 }
 
 # Function to generate contextual search queries
