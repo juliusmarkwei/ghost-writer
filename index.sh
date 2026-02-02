@@ -523,7 +523,7 @@ function get_active_app {
 function is_safe_app {
     local app_name="$1"
     case "$app_name" in
-        *Code*|*VSCode*|*Electron*|*Cursor*|*Windsurf*|*TextEdit*|*Notepad*|*gedit*|*kate*|*vim*|*nvim*|*emacs*|*iTerm*|*Terminal*|*Warp*|*Alacritty*|*Hyper*|*kitty*|*Windows_Generic*)
+        *TextEdit*|*Notepad*|*gedit*|*kate*|*vim*|*nvim*|*emacs*|*iTerm*|*Terminal*|*Warp*|*Alacritty*|*Hyper*|*kitty*|*Windows_Generic*)
             return 0
             ;;
         *)
@@ -741,7 +741,7 @@ function simulate_typing_session {
         # Check focus before typing each line
         wait_for_safe_focus
 
-        # Type the line with original indentation (Vim doesn't auto-indent like VS Code)
+        # Type the line with original indentation
         type_text "$line"
         sleep 0.1
     done < "$source_file"
@@ -837,7 +837,7 @@ function main_loop {
             echo "❌ ERROR: No files were successfully typed in this cycle!"
             echo "❌ This usually means:"
             echo "   1. The typing function encountered an error"
-            echo "   2. VS Code is not properly focused"
+            echo "   2. Vim/Terminal is not properly focused"
             echo "   3. Permissions are not granted (macOS Accessibility)"
             echo ""
             echo "Stopping to prevent infinite loop..."

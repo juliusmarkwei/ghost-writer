@@ -142,33 +142,6 @@ else
     fi
 fi
 
-# Check VS Code (all platforms)
-echo ""
-echo "🔍  Checking VS Code..."
-if ! command -v code &> /dev/null; then
-    echo "⚠️  VS Code command 'code' not found in PATH."
-    echo ""
-    echo "    Please install VS Code and add 'code' to your PATH:"
-    if [[ "$OS_NAME" == "Darwin" ]]; then
-        echo "    1. Install VS Code from: https://code.visualstudio.com/"
-        echo "    2. Open VS Code"
-        echo "    3. Press Cmd+Shift+P"
-        echo "    4. Type: 'Shell Command: Install code command in PATH'"
-    elif [[ "$OS_NAME" == "Linux" ]]; then
-        echo "    1. Install VS Code from: https://code.visualstudio.com/"
-        echo "    2. The 'code' command should be automatically added to PATH"
-        echo "    3. If not, add it manually or reinstall VS Code"
-    else
-        echo "    1. Install VS Code from: https://code.visualstudio.com/"
-        echo "    2. During installation, check 'Add to PATH'"
-        echo "    3. Or add VS Code's bin folder to your PATH manually"
-    fi
-    echo ""
-    echo "    GhostWriter requires VS Code to function."
-else
-    echo "✅  VS Code 'code' command found."
-fi
-
 echo ""
 echo "✅  Installation Complete!"
 echo "    Installed to: $INSTALL_DIR/$SCRIPT_NAME"
