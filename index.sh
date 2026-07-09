@@ -710,6 +710,23 @@ function vim_save {
     press_enter; sleep 0.25
 }
 
+# Confirm vim actually launched before we start sending buffer commands, so a
+# dropped Enter never blasts a file's contents into the shell prompt instead.
+function wait_for_vim {
+    if [[ "$OS_NAME" != "Darwin" && "$OS_NAME" != "Linux" ]]; then
+        return 0  # pgrep unavailable on Windows/Git Bash; skip the guard
+    fi
+    local tries=0
+    while (( tries < 16 )); do
+        if pgrep -f "vim -- " >/dev/null 2>&1 || pgrep -x vim >/dev/null 2>&1; then
+            return 0
+        fi
+        sleep 0.5
+        tries=$(( tries + 1 ))
+    done
+    return 1
+}
+
 # Build search queries derived from the language and identifiers of a source file
 function derive_search_queries {
     local file="$1"
@@ -876,26 +893,26 @@ trap cleanup SIGINT SIGTERM
 # All files open together as buffers in one vim window
 function open_editor_workspace {
     echo "📂 Ready to open files in vim..."
-    echo "   (All files open together in a new $TERMINAL_APP window)"
+    echo "   (All files open together in a new $TERMINAL_APP tab)"
 }
 
 
 # Open every source file as a numbered buffer in ONE vim window
 function open_all_in_vim {
     # Uses globals: TARGETS (array), SUBPROJECT_PATH, TERMINAL_APP, OS_NAME
-    echo "📂 Opening ${#TARGETS[@]} file(s) in a single vim window..."
+    echo "📂 Opening ${#TARGETS[@]} file(s) in a new tab..."
 
     if [[ "$OS_NAME" == "Darwin" ]]; then
-        # Open every target via a short glob (zero-padded names keep buffer
-        # order == source order), so the typed command stays tiny even for
-        # hundreds of files.
+        # Open a new tab in the CURRENT terminal window (Cmd+T), then launch vim
+        # over a short glob (zero-padded names keep buffer order == source order).
         osascript -e "tell application \"$TERMINAL_APP\" to activate" 2>/dev/null
         sleep 0.8
-        osascript -e 'tell application "System Events" to keystroke "n" using command down' 2>/dev/null
-        sleep 1.4
+        osascript -e 'tell application "System Events" to keystroke "t" using command down' 2>/dev/null
+        sleep 2                     # wait for the new tab's shell prompt
         send_keys_instant "cd '$SUBPROJECT_PATH' && vim -- *"
-        press_enter
-        sleep 1.5
+        sleep 0.6                   # ensure the whole command is typed...
+        press_enter                 # ...before submitting it
+        sleep 3                     # give vim time to open every buffer
     elif [[ "$OS_NAME" == "Linux" ]]; then
         if command -v gnome-terminal &> /dev/null; then
             gnome-terminal --maximize -- vim "${TARGETS[@]}" &
@@ -935,8 +952,14 @@ function run_typing_cycle {
 
     open_all_in_vim
 
-    echo "⏳ Focusing the editor (5s)..."
-    sleep 5
+    if ! wait_for_vim; then
+        echo "❌ vim did not open in the new tab — aborting this cycle so keystrokes"
+        echo "   don't land in your shell. Check that vim launches in $TERMINAL_APP."
+        return 1
+    fi
+    echo "✅ vim is open."
+
+    sleep 1
     wait_for_safe_focus
 
     if [[ "$MOUSE_MONITOR_ACTIVE" == "false" ]]; then
