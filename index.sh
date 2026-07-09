@@ -540,8 +540,10 @@ function get_active_app {
 
 function is_safe_app {
     local app_name="$1"
+    # Warp reports its process name as the release channel ("stable"/"preview"),
+    # not "Warp", so match those explicitly.
     case "$app_name" in
-        *TextEdit*|*Notepad*|*gedit*|*kate*|*vim*|*nvim*|*emacs*|*iTerm*|*Terminal*|*Warp*|*Alacritty*|*Hyper*|*kitty*|*Windows_Generic*)
+        *TextEdit*|*Notepad*|*gedit*|*kate*|*vim*|*nvim*|*emacs*|*iTerm*|*Terminal*|*Warp*|stable|preview|*Alacritty*|*Hyper*|*kitty*|*Windows_Generic*)
             return 0
             ;;
         *)
@@ -880,34 +882,31 @@ function open_editor_workspace {
 
 # Open every source file as a numbered buffer in ONE vim window
 function open_all_in_vim {
-    # Uses globals: TARGETS (array), TERMINAL_APP, OS_NAME
-    local vim_cmd="vim"
-    local t
-    for t in "${TARGETS[@]}"; do
-        vim_cmd+=" '$t'"
-    done
-
+    # Uses globals: TARGETS (array), SUBPROJECT_PATH, TERMINAL_APP, OS_NAME
     echo "📂 Opening ${#TARGETS[@]} file(s) in a single vim window..."
 
     if [[ "$OS_NAME" == "Darwin" ]]; then
+        # Open every target via a short glob (zero-padded names keep buffer
+        # order == source order), so the typed command stays tiny even for
+        # hundreds of files.
         osascript -e "tell application \"$TERMINAL_APP\" to activate" 2>/dev/null
         sleep 0.8
         osascript -e 'tell application "System Events" to keystroke "n" using command down' 2>/dev/null
         sleep 1.4
-        send_keys_instant "$vim_cmd"
+        send_keys_instant "cd '$SUBPROJECT_PATH' && vim -- *"
         press_enter
-        sleep 1.2
+        sleep 1.5
     elif [[ "$OS_NAME" == "Linux" ]]; then
         if command -v gnome-terminal &> /dev/null; then
             gnome-terminal --maximize -- vim "${TARGETS[@]}" &
         elif command -v xterm &> /dev/null; then
             xterm -maximized -e vim "${TARGETS[@]}" &
         else
-            echo "⚠️  Please open vim manually: $vim_cmd"
+            echo "⚠️  Please open vim manually in: $SUBPROJECT_PATH"
         fi
         sleep 2
     else
-        start /max bash -c "$vim_cmd" 2>/dev/null || echo "Please open vim manually: $vim_cmd"
+        start /max bash -c "cd '$SUBPROJECT_PATH' && vim -- *" 2>/dev/null || echo "Please open vim manually in: $SUBPROJECT_PATH"
         sleep 2
     fi
 }
@@ -924,7 +923,8 @@ function run_typing_cycle {
     for (( i=0; i<n; i++ )); do
         local fn
         fn=$(basename "${SRC_FILES[i]}")
-        TARGETS[i]="$SUBPROJECT_PATH/$(date +%s)_${RANDOM}_${fn}"
+        # Zero-padded index keeps glob order == source order == vim buffer order
+        TARGETS[i]="$SUBPROJECT_PATH/$(printf '%04d' "$(( i + 1 ))")_${fn}"
         : > "${TARGETS[i]}"
         NEXT[i]=1
         TOTAL[i]=$(awk 'END{print NR}' "${SRC_FILES[i]}" 2>/dev/null)
