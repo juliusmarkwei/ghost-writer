@@ -2,11 +2,18 @@
 
 # Defaults
 DURATION_MINUTES=30
-MIN_DELAY_MS=100
-MAX_DELAY_MS=300
+MIN_DELAY_MS=150
+MAX_DELAY_MS=380
 SUBPROJECT_NAME="simulation-subproject"
 SOURCE_FILE_RELATIVE=""
 MOUSE_MONITOR_ACTIVE=false
+
+# Human-behavior simulation
+TERMINAL_APP="Warp Preview"   # terminal that hosts the vim window
+SLACK_APP="Slack"             # Slack desktop app name
+ENABLE_BROWSER=true           # open the default browser and "research" topics
+ENABLE_SLACK=true             # open Slack and draft (never send) a message
+BREAK_CHANCE=45               # % chance of stepping away between files
 
 # Embedded Comprehensive Source (TypeScript)
 read -r -d '' DEFAULT_CONTENT << 'EOF'
@@ -127,10 +134,15 @@ function show_help {
     echo ""
     echo "Options:"
     echo "  -d, --duration <min>   Duration in minutes (default: 30)"
-    echo "  --min-delay <ms>       Minimum delay between keystrokes (default: 100)"
-    echo "  --max-delay <ms>       Maximum delay between keystrokes (default: 300)"
+    echo "  --min-delay <ms>       Minimum delay between keystrokes (default: 150)"
+    echo "  --max-delay <ms>       Maximum delay between keystrokes (default: 380)"
     echo "  --name <name>          Name of subproject (default: simulation-subproject)"
     echo "  --source <path>        Relative or absolute path to source file/directory"
+    echo "  --terminal-app <name>  Terminal app to host vim (default: 'Warp Preview')"
+    echo "  --slack-app <name>     Slack app name (default: 'Slack')"
+    echo "  --no-browser           Disable browser 'research' breaks"
+    echo "  --no-slack             Disable Slack breaks"
+    echo "  --break-chance <0-100> Chance of stepping away between files (default: 45)"
     echo "  -h, --help             Show this help message"
     echo ""
     echo "Examples:"
@@ -139,6 +151,7 @@ function show_help {
     echo "  ghost-writer --name my-project           # Custom subproject name"
     echo "  ghost-writer --source src/utils.ts       # Type a specific file"
     echo "  ghost-writer --source src/               # Process all files in directory"
+    echo "  ghost-writer --no-slack --no-browser     # Pure typing, no distractions"
     exit 0
 }
 
@@ -151,6 +164,11 @@ while [[ "$#" -gt 0 ]]; do
         --max-delay) MAX_DELAY_MS="$2"; shift ;;
         --name) SUBPROJECT_NAME="$2"; shift ;;
         --source) SOURCE_FILE_RELATIVE="$2"; USER_PROVIDED_SOURCE=true; shift ;;
+        --terminal-app) TERMINAL_APP="$2"; shift ;;
+        --slack-app) SLACK_APP="$2"; shift ;;
+        --no-browser) ENABLE_BROWSER=false ;;
+        --no-slack) ENABLE_SLACK=false ;;
+        --break-chance) BREAK_CHANCE="$2"; shift ;;
         -h|--help) show_help ;;
         *) echo "Unknown parameter passed: $1"; exit 1 ;;
     esac
@@ -425,7 +443,7 @@ function type_text {
         sleep "$delay_sec"
     done
 
-    # Press Enter at the end of the line (simple for Nano - no auto-complete to deal with)
+    # Press Enter at the end of the line
     sleep 0.1
     if [[ "$OS_NAME" == "Darwin" ]]; then
         osascript -e 'tell application "System Events" to key code 36' 2>/dev/null
@@ -536,8 +554,8 @@ function refocus_app {
     local app_name="$1"
 
     if [[ "$OS_NAME" == "Darwin" ]]; then
-        # For macOS, try to activate Terminal (for Nano)
-        osascript -e 'tell application "Terminal" to activate' 2>/dev/null || \
+        # For macOS, bring the terminal hosting vim back to the front
+        osascript -e "tell application \"$TERMINAL_APP\" to activate" 2>/dev/null || \
         osascript -e "tell application \"$app_name\" to activate" 2>/dev/null
     elif [[ "$OS_NAME" == "Linux" ]]; then
         xdotool search --name "$app_name" windowactivate 2>/dev/null || xdotool search --class "$app_name" windowactivate 2>/dev/null
@@ -594,13 +612,258 @@ function wait_for_safe_focus {
     done
 }
 
+# ── Human-behavior helpers: browsing, Slack, and natural breaks ──────────
+
+# URL-encode a string for use in a search query
+function urlencode {
+    local s="$1"
+    if command -v python3 &>/dev/null; then
+        python3 -c "import urllib.parse,sys; print(urllib.parse.quote(sys.argv[1]))" "$s" 2>/dev/null && return
+    fi
+    echo "${s// /+}"
+}
+
+# Open a URL in the default browser without moving focus away from the keyboard
+function open_url {
+    local url="$1"
+    if [[ "$OS_NAME" == "Darwin" ]]; then
+        open "$url" 2>/dev/null
+    elif [[ "$OS_NAME" == "Linux" ]]; then
+        xdg-open "$url" 2>/dev/null &
+    else
+        powershell.exe -Command "Start-Process '$url'" > /dev/null 2>&1
+    fi
+}
+
+# ── Timing guards so long pauses never overrun the session duration ──────
+
+function seconds_left { echo $(( DURATION_SEC - ($(date +%s) - START_TIME) )); }
+
+function time_up { [[ "$(seconds_left)" -le 0 ]]; }
+
+# Sleep up to N seconds, but never past the deadline. Returns 1 when time is up.
+function capped_sleep {
+    local want="$1"
+    local left
+    left="$(seconds_left)"
+    (( left <= 0 )) && return 1
+    (( want > left )) && want="$left"
+    (( want > 0 )) && sleep "$want"
+    return 0
+}
+
+# ── Low-level keystroke helpers (used to drive vim across files) ──────────
+
+function press_escape {
+    if [[ "$OS_NAME" == "Darwin" ]]; then
+        osascript -e 'tell application "System Events" to key code 53' 2>/dev/null
+    elif [[ "$OS_NAME" == "Linux" ]]; then
+        xdotool key Escape
+    else
+        powershell.exe -Command "Add-Type -AssemblyName System.Windows.Forms; [System.Windows.Forms.SendKeys]::SendWait('{ESC}')" > /dev/null 2>&1
+    fi
+}
+
+function press_enter {
+    if [[ "$OS_NAME" == "Darwin" ]]; then
+        osascript -e 'tell application "System Events" to key code 36' 2>/dev/null
+    elif [[ "$OS_NAME" == "Linux" ]]; then
+        xdotool key Return
+    else
+        powershell.exe -Command "Add-Type -AssemblyName System.Windows.Forms; [System.Windows.Forms.SendKeys]::SendWait('{ENTER}')" > /dev/null 2>&1
+    fi
+}
+
+# Type a short control string instantly (vim commands like :b2, :w, G, A)
+function send_keys_instant {
+    local s="$1"
+    if [[ "$OS_NAME" == "Darwin" ]]; then
+        osascript -e "tell application \"System Events\" to keystroke \"$s\"" 2>/dev/null
+    elif [[ "$OS_NAME" == "Linux" ]]; then
+        xdotool type --delay 0 -- "$s"
+    else
+        local esc="${s//\'/\'\'}"
+        powershell.exe -Command "Add-Type -AssemblyName System.Windows.Forms; [System.Windows.Forms.SendKeys]::SendWait('$esc')" > /dev/null 2>&1
+    fi
+}
+
+# Switch the single vim window to buffer N (each file is a numbered buffer)
+function vim_switch_buffer {
+    press_escape; sleep 0.15
+    send_keys_instant ":b$1"; sleep 0.1
+    press_enter; sleep 0.35
+}
+
+# Move to end of the current buffer and enter insert mode to append
+function vim_resume_append {
+    press_escape; sleep 0.1
+    send_keys_instant "G"; sleep 0.1
+    send_keys_instant "A"; sleep 0.2
+}
+
+# Save the current buffer (stays in normal mode afterwards)
+function vim_save {
+    press_escape; sleep 0.15
+    send_keys_instant ":w"; sleep 0.1
+    press_enter; sleep 0.25
+}
+
+# Build search queries derived from the language and identifiers of a source file
+function derive_search_queries {
+    local file="$1"
+    local ext="${file##*.}"
+    local lang
+    case "$ext" in
+        ts|tsx) lang="typescript" ;;
+        js|jsx) lang="javascript" ;;
+        py)     lang="python" ;;
+        go)     lang="golang" ;;
+        rs)     lang="rust" ;;
+        java)   lang="java" ;;
+        rb)     lang="ruby" ;;
+        sh)     lang="bash" ;;
+        c|h)    lang="c" ;;
+        cpp|cc|hpp) lang="c++" ;;
+        *)      lang="programming" ;;
+    esac
+
+    local -a symbols=()
+    if [[ -f "$file" ]]; then
+        while IFS= read -r name; do
+            [[ -n "$name" ]] && symbols+=("$name")
+        done < <(grep -oE '\b(class|interface|function|type|struct|def|func)[[:space:]]+[A-Za-z_][A-Za-z0-9_]*' "$file" 2>/dev/null \
+                    | awk '{print $2}' | sort -u | head -n 5)
+    fi
+
+    local -a topics=(
+        "best practices" "design patterns" "error handling"
+        "async await" "unit testing" "performance optimization"
+        "clean code" "dependency injection" "memory management"
+    )
+
+    local -a queries=()
+    queries+=("$lang ${topics[RANDOM % ${#topics[@]}]}")
+    if [[ ${#symbols[@]} -gt 0 ]]; then
+        local sym="${symbols[RANDOM % ${#symbols[@]}]}"
+        queries+=("$lang $sym implementation")
+        queries+=("how to test $sym in $lang")
+    fi
+    queries+=("stack overflow $lang ${topics[RANDOM % ${#topics[@]}]}")
+
+    printf '%s\n' "${queries[@]}"
+}
+
+# Step away to "research" a couple of project-related topics in the browser
+function browser_research {
+    [[ "$ENABLE_BROWSER" != "true" ]] && return 0
+    local file="$1"
+
+    echo "🌐 Taking a break to look something up..."
+
+    local -a queries=()
+    while IFS= read -r q; do queries+=("$q"); done < <(derive_search_queries "$file")
+    [[ ${#queries[@]} -eq 0 ]] && return 0
+
+    local count=$(( 1 + RANDOM % 2 ))  # 1-2 searches
+    for (( n=0; n<count && n<${#queries[@]}; n++ )); do
+        local query="${queries[n]}"
+        echo "   🔎 Searching: \"$query\""
+        open_url "https://www.google.com/search?q=$(urlencode "$query")"
+        local read_time=$(( 6 + RANDOM % 15 ))
+        echo "   📖 Reading for ${read_time}s..."
+        capped_sleep "$read_time" || break
+    done
+
+    echo "   ↩️  Back to the code."
+    refocus_app "$KNOWN_EDITOR_APP"
+    sleep 1
+}
+
+# Open Slack, linger, open a random member's DM and draft a message — never sent
+function slack_interlude {
+    [[ "$ENABLE_SLACK" != "true" ]] && return 0
+
+    if [[ "$OS_NAME" != "Darwin" ]]; then
+        return 0
+    fi
+
+    echo "💬 Checking Slack..."
+    open -a "$SLACK_APP" 2>/dev/null
+    osascript -e "tell application \"$SLACK_APP\" to activate" 2>/dev/null
+    sleep 1.5
+
+    local linger=$(( 8 + RANDOM % 15 ))
+    echo "   👀 Reading messages for ${linger}s..."
+    capped_sleep "$linger" || { refocus_app "$KNOWN_EDITOR_APP"; return 0; }
+
+    echo "   🧭 Opening a direct message..."
+    osascript -e 'tell application "System Events" to keystroke "k" using command down' 2>/dev/null
+    sleep 1
+
+    # Surface people with a random letter, step down to a random result, open it
+    local letters=(a b c d e j m s t)
+    local letter="${letters[RANDOM % ${#letters[@]}]}"
+    osascript -e "tell application \"System Events\" to keystroke \"$letter\"" 2>/dev/null
+    sleep 1
+    local steps=$(( RANDOM % 4 ))
+    for (( s=0; s<steps; s++ )); do
+        osascript -e 'tell application "System Events" to key code 125' 2>/dev/null  # Down
+        sleep 0.3
+    done
+    # Enter here only navigates to the conversation (composer is empty — nothing is sent)
+    osascript -e 'tell application "System Events" to key code 36' 2>/dev/null
+    sleep 1.5
+
+    local drafts=(
+        "hey, quick question when you get a sec"
+        "morning! did you get a chance to look at the PR"
+        "can you review this when you're free"
+        "thanks for the help earlier"
+    )
+    local draft="${drafts[RANDOM % ${#drafts[@]}]}"
+    echo "   ⌨️  Drafting (never sent): \"$draft\""
+    osascript -e "tell application \"System Events\" to keystroke \"$draft\"" 2>/dev/null
+    sleep 2
+
+    # Clear the draft so nothing is left in the composer; Enter is never pressed
+    osascript -e 'tell application "System Events" to keystroke "a" using command down' 2>/dev/null
+    sleep 0.2
+    osascript -e 'tell application "System Events" to key code 51' 2>/dev/null  # Delete
+    sleep 1
+
+    echo "   💬 Leaving Slack open, back to work."
+    refocus_app "$KNOWN_EDITOR_APP"
+    sleep 1
+}
+
+# Between files, sometimes behave like a distracted human: browse, Slack, or rest
+function maybe_take_break {
+    local file="$1"
+    local roll=$(( RANDOM % 100 ))
+
+    if (( roll >= BREAK_CHANCE )); then
+        return 0  # stay heads-down
+    fi
+
+    local pick=$(( RANDOM % 100 ))
+    if (( pick < 45 )); then
+        browser_research "$file"
+    elif (( pick < 80 )); then
+        slack_interlude
+    else
+        local nap=$(( 10 + RANDOM % 20 ))
+        echo "☕ Stepping away for ${nap}s..."
+        capped_sleep "$nap"
+    fi
+}
+
 # Cleanup handler for graceful shutdown
 function cleanup {
     echo ""
     echo "🧹 Cleaning up..."
-    if [[ -n "$MONITOR_PID" ]] && kill -0 "$MONITOR_PID" 2>/dev/null; then
-        kill "$MONITOR_PID" 2>/dev/null
-        wait "$MONITOR_PID" 2>/dev/null
+    if [[ -n "$MOUSE_MONITOR_PID" ]] && kill -0 "$MOUSE_MONITOR_PID" 2>/dev/null; then
+        kill "$MOUSE_MONITOR_PID" 2>/dev/null
+        wait "$MOUSE_MONITOR_PID" 2>/dev/null
     fi
     MOUSE_MONITOR_ACTIVE=false
     exit 0
@@ -608,149 +871,147 @@ function cleanup {
 
 trap cleanup SIGINT SIGTERM
 
-# Nano doesn't need a workspace opened - files are opened individually
+# All files open together as buffers in one vim window
 function open_editor_workspace {
-    echo "📂 Ready to open files in Nano..."
-    echo "   (Each file will open in a new Terminal window)"
+    echo "📂 Ready to open files in vim..."
+    echo "   (All files open together in a new $TERMINAL_APP window)"
 }
 
 
-# Simulate typing for a single file
-function simulate_typing_session {
-    local source_file="$1"
-    local is_first_file="$2"
+# Open every source file as a numbered buffer in ONE vim window
+function open_all_in_vim {
+    # Uses globals: TARGETS (array), TERMINAL_APP, OS_NAME
+    local vim_cmd="vim"
+    local t
+    for t in "${TARGETS[@]}"; do
+        vim_cmd+=" '$t'"
+    done
 
-    local filename=$(basename "$source_file")
-    local extension="${filename##*.}"
-    if [[ "$filename" == "$extension" ]]; then extension="txt"; fi
-
-    local unique_id="$(date +%s)_$RANDOM"
-    local target_file="$SUBPROJECT_PATH/${unique_id}_${filename}"
-
-    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    echo "STEP 1: Creating file..."
-    touch "$target_file"
-
-    if [[ ! -f "$target_file" ]]; then
-        echo "❌ ERROR: Failed to create file: $target_file"
-        return 1
-    fi
-    echo "✅ File created: $target_file"
-
-    echo ""
-    echo "STEP 2: Opening in Vim..."
+    echo "📂 Opening ${#TARGETS[@]} file(s) in a single vim window..."
 
     if [[ "$OS_NAME" == "Darwin" ]]; then
-        # macOS: Open vim in a new Terminal window and maximize it
-        osascript -e "tell application \"Terminal\" to do script \"vim '$target_file'\"" 2>/dev/null
-        osascript -e 'tell application "Terminal" to activate' 2>/dev/null
-        sleep 0.5
-        # Maximize the Terminal window (enter full screen)
-        osascript -e '
-            tell application "System Events"
-                tell process "Terminal"
-                    set frontWindow to first window
-                    set position of frontWindow to {0, 0}
-                    set size of frontWindow to {1920, 1080}
-                end tell
-            end tell
-        ' 2>/dev/null
-        # Alternative: Enter actual full screen mode (Ctrl+Cmd+F)
-        osascript -e 'tell application "System Events" to key code 3 using {control down, command down}' 2>/dev/null
+        osascript -e "tell application \"$TERMINAL_APP\" to activate" 2>/dev/null
+        sleep 0.8
+        osascript -e 'tell application "System Events" to keystroke "n" using command down' 2>/dev/null
+        sleep 1.4
+        send_keys_instant "$vim_cmd"
+        press_enter
+        sleep 1.2
     elif [[ "$OS_NAME" == "Linux" ]]; then
-        # Linux: Open vim in a new terminal (try common terminal emulators) with maximize
         if command -v gnome-terminal &> /dev/null; then
-            gnome-terminal --maximize -- vim "$target_file" &
+            gnome-terminal --maximize -- vim "${TARGETS[@]}" &
         elif command -v xterm &> /dev/null; then
-            xterm -maximized -e vim "$target_file" &
+            xterm -maximized -e vim "${TARGETS[@]}" &
         else
-            echo "⚠️  Please open vim manually: vim $target_file"
+            echo "⚠️  Please open vim manually: $vim_cmd"
         fi
+        sleep 2
     else
-        # Windows: Open vim via Git Bash / WSL (maximized)
-        start /max bash -c "vim '$target_file'" 2>/dev/null || echo "Please open vim manually: vim $target_file"
+        start /max bash -c "$vim_cmd" 2>/dev/null || echo "Please open vim manually: $vim_cmd"
+        sleep 2
     fi
+}
 
-    echo ""
-    echo "STEP 3: Waiting for you to focus Vim..."
-    if [[ "$is_first_file" == "true" ]]; then
-        echo "⏳ Please click on the Terminal/Vim window (5 seconds)..."
-        sleep 5
-    else
-        echo "⏳ Please click on the Terminal/Vim window (3 seconds)..."
-        sleep 3
-    fi
+# Type the whole batch by hopping between files a line or two at a time,
+# the way a developer actually moves around a codebase.
+function run_typing_cycle {
+    # Uses global: SRC_FILES (array of source paths)
+    local n=${#SRC_FILES[@]}
+    (( n == 0 )) && return 1
 
-    echo ""
-    echo "STEP 4: Checking if Terminal is focused..."
+    local -a TARGETS NEXT TOTAL DONE
+    local i
+    for (( i=0; i<n; i++ )); do
+        local fn
+        fn=$(basename "${SRC_FILES[i]}")
+        TARGETS[i]="$SUBPROJECT_PATH/$(date +%s)_${RANDOM}_${fn}"
+        : > "${TARGETS[i]}"
+        NEXT[i]=1
+        TOTAL[i]=$(awk 'END{print NR}' "${SRC_FILES[i]}" 2>/dev/null)
+        [[ -z "${TOTAL[i]}" ]] && TOTAL[i]=0
+        DONE[i]=0
+        (( TOTAL[i] == 0 )) && DONE[i]=1
+    done
+
+    open_all_in_vim
+
+    echo "⏳ Focusing the editor (5s)..."
+    sleep 5
     wait_for_safe_focus
 
-    echo ""
-    echo "STEP 5: Entering Insert mode and starting to type!"
-    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-
-    # Enter Insert mode in Vim (press 'i')
-    if [[ "$OS_NAME" == "Darwin" ]]; then
-        osascript -e 'tell application "System Events" to keystroke "i"' 2>/dev/null
-    elif [[ "$OS_NAME" == "Linux" ]]; then
-        xdotool type "i"
-    else
-        powershell.exe -Command "
-            Add-Type -AssemblyName System.Windows.Forms
-            [System.Windows.Forms.SendKeys]::SendWait('i')
-        " > /dev/null 2>&1
-    fi
-    sleep 0.3
-
-    # Start mouse monitor if not already active
     if [[ "$MOUSE_MONITOR_ACTIVE" == "false" ]]; then
-        local initial_mouse=$(get_mouse_pos)
+        local initial_mouse
+        initial_mouse=$(get_mouse_pos)
         monitor_mouse "$initial_mouse" "$$" &
         MOUSE_MONITOR_PID=$!
         MOUSE_MONITOR_ACTIVE=true
     fi
 
-    echo "✍️  Typing content from $source_file..."
+    local remaining=$n
+    local typed_anything=0
+    local switches=0
 
+    while (( remaining > 0 )); do
+        time_up && { echo "⏰  Duration reached mid-cycle."; break; }
 
-    local line_count=0
-    while IFS= read -r line || [[ -n "$line" ]]; do
-        # Check if we should continue
-        if ! kill -0 $$ 2>/dev/null; then
-            break
-        fi
+        for (( i=0; i<n; i++ )); do
+            (( DONE[i] == 1 )) && continue
+            time_up && break
+            kill -0 $$ 2>/dev/null || return 1
 
-        line_count=$((line_count + 1))
+            wait_for_safe_focus
+            vim_switch_buffer "$(( i + 1 ))"
+            vim_resume_append
 
-        # Check if 20 seconds have passed since last save
-        local current_time=$(date +%s)
-        local time_since_save=$((current_time - last_save_time))
+            # Type a burst of 1–2 lines, then move on
+            local burst=$(( 1 + RANDOM % 2 ))
+            local c
+            for (( c=0; c<burst; c++ )); do
+                (( NEXT[i] > TOTAL[i] )) && break
+                local line
+                line=$(sed -n "${NEXT[i]}p" "${SRC_FILES[i]}")
+                wait_for_safe_focus
+                type_text "$line"
+                NEXT[i]=$(( NEXT[i] + 1 ))
+                typed_anything=1
+            done
 
-        if [[ "$time_since_save" -ge 20 ]]; then
-            save_file
-            last_save_time=$(date +%s)
-        fi
+            vim_save
 
-        # Random Thinking Pause every ~20 lines
-        if (( line_count % 20 == 0 )) && (( RANDOM % 3 == 0 )); then
-            local pause=$(( 3 + RANDOM % 8 ))
-            echo "🧠  Thinking for ${pause}s..."
-            sleep "$pause"
-        fi
+            if (( NEXT[i] > TOTAL[i] )); then
+                DONE[i]=1
+                remaining=$(( remaining - 1 ))
+                echo "✅ Finished $(basename "${SRC_FILES[i]}") (${TOTAL[i]} lines)"
+            else
+                echo "✍️  $(basename "${SRC_FILES[i]}"): $(( NEXT[i] - 1 ))/${TOTAL[i]} lines"
+            fi
 
-        # Check focus before typing each line
-        wait_for_safe_focus
+            # A short beat before hopping to the next file
+            capped_sleep "$(( 1 + RANDOM % 3 ))" || break
 
-        # Type the line with original indentation
-        type_text "$line"
-        sleep 0.1
-    done < "$source_file"
+            # Occasional longer "thinking" pause
+            if (( RANDOM % 6 == 0 )); then
+                local think=$(( 4 + RANDOM % 10 ))
+                echo "🧠  Thinking for ${think}s..."
+                capped_sleep "$think" || break
+            fi
 
-    # Final save at the end
-    echo "💾 Final save..."
-    save_file
+            # Every few file hops, maybe step away (browser / Slack / rest)
+            switches=$(( switches + 1 ))
+            if (( switches % 3 == 0 )) && ! time_up; then
+                maybe_take_break "${SRC_FILES[i]}"
+            fi
+        done
+    done
 
-    echo "✅ Completed typing $(basename "$source_file") ($line_count lines)"
+    echo "💾 Saving all files..."
+    press_escape; sleep 0.15
+    send_keys_instant ":wa"; sleep 0.1
+    press_enter; sleep 0.3
+
+    time_up && return 0
+    (( typed_anything == 1 )) && return 0
+    return 1
 }
 
 # Main Loop - Process cycles
@@ -759,9 +1020,7 @@ function main_loop {
     local CYCLE_COUNT=0
 
     while true; do
-        CURRENT_TIME=$(date +%s)
-        ELAPSED=$((CURRENT_TIME - START_TIME))
-        if [[ "$ELAPSED" -ge "$DURATION_SEC" ]]; then
+        if time_up; then
             echo "⏰  Duration reached. Exiting."
             cleanup
             break
@@ -795,41 +1054,13 @@ function main_loop {
 
         echo "📋 Files to process in this cycle: ${#FILES_TO_PROCESS[@]}"
 
-        local file_index=0
         local successfully_typed=false
 
-        for file in "${FILES_TO_PROCESS[@]}"; do
-             # Check time limit before each file
-             CURRENT_TIME=$(date +%s)
-             if [[ $((CURRENT_TIME - START_TIME)) -ge "$DURATION_SEC" ]]; then
-                 echo "⏰  Time limit reached during cycle"
-                 break
-             fi
-
-             file_index=$((file_index + 1))
-             echo ""
-             echo "➡️  Processing file $file_index/${#FILES_TO_PROCESS[@]}: $(basename "$file")"
-
-             local is_first_file="false"
-             if [[ "$FIRST_CYCLE" == "true" ]] && [[ "$file_index" -eq 1 ]]; then
-                 is_first_file="true"
-             fi
-
-             # Call typing function and check if it succeeded
-             if simulate_typing_session "$file" "$is_first_file"; then
-                 successfully_typed=true
-                 echo "✅ File processed successfully"
-             else
-                 echo "❌ File processing failed - stopping cycle"
-                 break
-             fi
-
-             # Small delay between files
-             if [[ "$file_index" -lt "${#FILES_TO_PROCESS[@]}" ]]; then
-                 echo "⏸️  Pausing 3 seconds before next file..."
-                 sleep 3
-             fi
-        done
+        # Type the whole batch, hopping between files a line or two at a time
+        SRC_FILES=("${FILES_TO_PROCESS[@]}")
+        if run_typing_cycle; then
+            successfully_typed=true
+        fi
 
         # Only continue cycling if typing was successful
         if [[ "$successfully_typed" == "false" ]]; then
@@ -851,11 +1082,11 @@ function main_loop {
         echo "✅ Cycle #$CYCLE_COUNT complete!"
 
         # Check if we should continue
-        REMAINING=$(( (DURATION_SEC - ($(date +%s) - START_TIME)) / 60 ))
-        if [[ "$REMAINING" -gt 0 ]]; then
+        if ! time_up; then
+            REMAINING=$(( $(seconds_left) / 60 ))
             echo "⏱️  Time remaining: approx $REMAINING minutes"
-            echo "⏸️  Waiting 10 seconds before next cycle..."
-            sleep 10
+            echo "⏸️  Waiting before next cycle..."
+            capped_sleep 10
         else
             echo "⏰  No time remaining, ending..."
             break
@@ -879,7 +1110,7 @@ INITIAL_MOUSE=$(get_mouse_pos)
 echo "📍 Initial mouse position: $INITIAL_MOUSE"
 echo ""
 
-# Initialize editor (Nano opens files individually, so just print info)
+# Announce the editor workflow before the first cycle
 open_editor_workspace
 
 # Run the main loop

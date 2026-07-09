@@ -1,13 +1,17 @@
 # GhostWriter
 
-A cross-platform CLI tool that simulates a developer typing code in real-time. It reads source files from your project and "types" them into Vim (terminal-based editor), mimicking human typing speeds and natural coding habits—perfect for demonstrations, tutorials, or just having fun watching code write itself.
+A cross-platform CLI tool that simulates a developer at work in real-time. It reads source files from your project and "types" them into Vim (terminal-based editor), hopping between files a line or two at a time, taking breaks to search the web, and glancing at Slack—mimicking human typing speeds and natural coding habits. Perfect for demonstrations, tutorials, or just having fun watching code write itself.
 
 ## ✨ Features
 
--   **Human-like Typing**: Variable typing speeds (100-300ms delays) to mimic realistic behavior
--   **Realistic Pauses**: Occasional "thinking" pauses (5-15 seconds) to simulate developer workflow
+-   **Human-like Typing**: Variable typing speeds (150-380ms delays) to mimic realistic behavior
+-   **File Hopping**: Opens all files together as vim buffers and types a burst of 1-2 lines in one file, pauses, switches to another, and continues there—just like a real developer moving around a codebase
+-   **Realistic Pauses**: Occasional "thinking" pauses and longer "working through a tricky bit" breaks to simulate developer workflow
+-   **Browser Research**: Steps away to search the web for topics derived from your code (language, class/function names) in your default browser
+-   **Slack Presence**: Opens Slack, lingers, and drafts a message to a random member—**never sends anything** (the message is always cleared, Enter is never pressed)
 -   **Smart Focus Management**: Automatically detects and maintains focus on safe editor applications
 -   **Mouse Movement Detection**: Instantly stops when you move your mouse, giving you immediate control
+-   **Accurate Duration**: Every pause and break is clamped to the remaining time, so the session never overruns `--duration`
 -   **Directory & File Support**: Process entire directories or individual files
 -   **Automated Workflow**: Creates temporary subprojects, opens files in Vim, and starts typing automatically
 -   **Looping Mode**: Runs continuously for a specified duration (default 30 minutes), recreating sessions after each cycle
@@ -15,9 +19,9 @@ A cross-platform CLI tool that simulates a developer typing code in real-time. I
 -   **Built-in Test Source**: Includes comprehensive TypeScript test content when no source is specified
 -   **Robust Cleanup**: Ensures fresh files for every cycle with proper signal handling
 -   **Cross-Platform Support**:
-    -   **macOS**: Uses `osascript` (built-in)
-    -   **Linux**: Uses `xdotool` (auto-installed)
-    -   **Windows**: Uses PowerShell (built-in)
+    -   **macOS**: Uses `osascript` (built-in); browser + Slack breaks fully supported
+    -   **Linux**: Uses `xdotool` (auto-installed); browser breaks supported
+    -   **Windows**: Uses PowerShell (built-in); browser breaks supported
 
 ## 📋 Prerequisites
 
@@ -116,14 +120,19 @@ This will:
 
 ### CLI Options
 
-| Option                 | Alias | Default                 | Description                                      |
-| :--------------------- | :---- | :---------------------- | :----------------------------------------------- |
-| `--duration <minutes>` | `-d`  | `30`                    | How long to run the simulation (in minutes)      |
-| `--min-delay <ms>`     |       | `100`                   | Minimum delay between keystrokes (faster typing) |
-| `--max-delay <ms>`     |       | `300`                   | Maximum delay between keystrokes (slower typing) |
-| `--name <name>`        |       | `simulation-subproject` | Name of the temporary subproject folder          |
-| `--source <path>`      |       | (auto-detect)           | Path to source file or directory to type         |
-| `--help`               | `-h`  |                         | Display help message and exit                    |
+| Option                  | Alias | Default                 | Description                                       |
+| :---------------------- | :---- | :---------------------- | :------------------------------------------------ |
+| `--duration <minutes>`  | `-d`  | `30`                    | How long to run the simulation (in minutes)       |
+| `--min-delay <ms>`      |       | `150`                   | Minimum delay between keystrokes (faster typing)  |
+| `--max-delay <ms>`      |       | `380`                   | Maximum delay between keystrokes (slower typing)  |
+| `--name <name>`         |       | `simulation-subproject` | Name of the temporary subproject folder           |
+| `--source <path>`       |       | (auto-detect)           | Path to source file or directory to type          |
+| `--terminal-app <name>` |       | `Warp Preview`          | Terminal app that hosts the vim window (macOS)     |
+| `--slack-app <name>`    |       | `Slack`                 | Slack desktop app name (macOS)                    |
+| `--no-browser`          |       |                         | Disable the browser "research" breaks             |
+| `--no-slack`            |       |                         | Disable the Slack breaks                          |
+| `--break-chance <0-100>`|       | `45`                    | Chance of stepping away between file hops         |
+| `--help`                | `-h`  |                         | Display help message and exit                     |
 
 ### Examples
 
@@ -149,6 +158,18 @@ ghost-writer --min-delay 50 --max-delay 150
 
 ```bash
 ghost-writer --min-delay 200 --max-delay 500
+```
+
+#### Pure typing, no distractions
+
+```bash
+ghost-writer --no-browser --no-slack
+```
+
+#### Fewer breaks, host vim in a specific terminal
+
+```bash
+ghost-writer --break-chance 15 --terminal-app "iTerm"
 ```
 
 #### Use a specific file
@@ -186,13 +207,12 @@ ghost-writer --source src/components/ --duration 120 --min-delay 80 --max-delay 
     - **Single file**: Types just that file
     - **Directory**: Processes all files recursively (excluding hidden files and `node_modules`)
 4. **Typing Simulation**:
-    - Opens each file in Vim (in a new Terminal window)
-    - Enters Insert mode and types line-by-line with random delays
+    - Opens **all files together** as numbered buffers in a single Vim window (in a new terminal window)
+    - Hops between files, typing a burst of 1-2 lines in one, then switching to another (`:bN`) and continuing where it left off
     - Preserves original indentation
-    - Types line-by-line with random delays between keystrokes
-    - Occasional "thinking" pauses (every ~20 lines)
-    - Monitors mouse position and stops if movement detected
-5. **Looping**: After completing all files, waits briefly and restarts until duration expires
+    - Random delays between keystrokes, plus occasional "thinking" pauses
+5. **Stepping Away**: Every few file hops it may take a break—searching the web in your default browser for topics derived from your code, glancing at Slack (drafting but never sending a message), or just resting. Each break is time-boxed so the session never overruns `--duration`.
+6. **Looping**: After completing all files, waits briefly and restarts until duration expires
 
 ## 🛡️ Safety Features
 
