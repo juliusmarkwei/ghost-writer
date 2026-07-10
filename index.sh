@@ -14,6 +14,7 @@ SLACK_APP="Slack"             # Slack desktop app name
 ENABLE_BROWSER=true           # open the default browser and "research" topics
 ENABLE_SLACK=true             # open Slack and draft (never send) a message
 BREAK_CHANCE=45               # % chance of stepping away between files
+FILE_DWELL_SEC=120            # seconds to spend on a file before switching
 
 # Embedded Comprehensive Source (TypeScript)
 read -r -d '' DEFAULT_CONTENT << 'EOF'
@@ -143,6 +144,7 @@ function show_help {
     echo "  --no-browser           Disable browser 'research' breaks"
     echo "  --no-slack             Disable Slack breaks"
     echo "  --break-chance <0-100> Chance of stepping away between files (default: 45)"
+    echo "  --dwell <seconds>      Time to spend on a file before switching (default: 120)"
     echo "  -h, --help             Show this help message"
     echo ""
     echo "Examples:"
@@ -169,6 +171,7 @@ while [[ "$#" -gt 0 ]]; do
         --no-browser) ENABLE_BROWSER=false ;;
         --no-slack) ENABLE_SLACK=false ;;
         --break-chance) BREAK_CHANCE="$2"; shift ;;
+        --dwell) FILE_DWELL_SEC="$2"; shift ;;
         -h|--help) show_help ;;
         *) echo "Unknown parameter passed: $1"; exit 1 ;;
     esac
@@ -710,6 +713,14 @@ function vim_save {
     press_enter; sleep 0.25
 }
 
+# Save mid-edit and return to insert mode at the end of the buffer
+function vim_save_and_continue {
+    press_escape; sleep 0.15
+    send_keys_instant ":w"; sleep 0.1
+    press_enter; sleep 0.25
+    send_keys_instant "A"; sleep 0.15
+}
+
 # Confirm vim actually launched before we start sending buffer commands, so a
 # dropped Enter never blasts a file's contents into the shell prompt instead.
 function wait_for_vim {
@@ -986,17 +997,41 @@ function run_typing_cycle {
             vim_switch_buffer "$(( i + 1 ))"
             vim_resume_append
 
-            # Type a burst of 1–2 lines, then move on
-            local burst=$(( 1 + RANDOM % 2 ))
-            local c
-            for (( c=0; c<burst; c++ )); do
-                (( NEXT[i] > TOTAL[i] )) && break
+            # Dwell on this file for ~2+ minutes (or until it's finished),
+            # typing lines with periodic saves and pauses before switching.
+            local dwell=$(( FILE_DWELL_SEC + RANDOM % 80 ))
+            local visit_start
+            visit_start=$(date +%s)
+            local since_type=0
+            echo "📄 Working on $(basename "${SRC_FILES[i]}") for ~$(( dwell / 60 ))m..."
+
+            while true; do
+                (( NEXT[i] > TOTAL[i] )) && break            # file finished
+                time_up && break
+                kill -0 $$ 2>/dev/null || return 1
+
                 local line
                 line=$(sed -n "${NEXT[i]}p" "${SRC_FILES[i]}")
                 wait_for_safe_focus
                 type_text "$line"
                 NEXT[i]=$(( NEXT[i] + 1 ))
                 typed_anything=1
+                since_type=$(( since_type + 1 ))
+
+                # Save periodically without leaving insert mode
+                if (( since_type % 10 == 0 )); then
+                    vim_save_and_continue
+                fi
+
+                # Occasional short "thinking" pause while working the file
+                if (( RANDOM % 8 == 0 )); then
+                    local think=$(( 3 + RANDOM % 10 ))
+                    echo "🧠  Thinking for ${think}s..."
+                    capped_sleep "$think" || break
+                fi
+
+                # Move on once we've spent our ~2 minutes here
+                (( $(date +%s) - visit_start >= dwell )) && break
             done
 
             vim_save
@@ -1006,18 +1041,11 @@ function run_typing_cycle {
                 remaining=$(( remaining - 1 ))
                 echo "✅ Finished $(basename "${SRC_FILES[i]}") (${TOTAL[i]} lines)"
             else
-                echo "✍️  $(basename "${SRC_FILES[i]}"): $(( NEXT[i] - 1 ))/${TOTAL[i]} lines"
+                echo "✍️  $(basename "${SRC_FILES[i]}"): $(( NEXT[i] - 1 ))/${TOTAL[i]} lines (switching files)"
             fi
 
             # A short beat before hopping to the next file
-            capped_sleep "$(( 1 + RANDOM % 3 ))" || break
-
-            # Occasional longer "thinking" pause
-            if (( RANDOM % 6 == 0 )); then
-                local think=$(( 4 + RANDOM % 10 ))
-                echo "🧠  Thinking for ${think}s..."
-                capped_sleep "$think" || break
-            fi
+            capped_sleep "$(( 2 + RANDOM % 4 ))" || break
 
             # Every few file hops, maybe step away (browser / Slack / rest)
             switches=$(( switches + 1 ))
