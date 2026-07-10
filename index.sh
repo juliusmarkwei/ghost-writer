@@ -798,26 +798,62 @@ function derive_search_queries {
     printf '%s\n' "${queries[@]}"
 }
 
-# Step away to "research" a couple of project-related topics in the browser
+# Scroll the current browser page down a few times (Page Down)
+function browser_scroll {
+    local times="${1:-3}" k
+    [[ "$OS_NAME" != "Darwin" ]] && return 0
+    for (( k=0; k<times; k++ )); do
+        osascript -e 'tell application "System Events" to key code 121' 2>/dev/null  # Page Down
+        capped_sleep "$(( 1 + RANDOM % 3 ))" || return 1
+    done
+    return 0
+}
+
+# Navigate the current tab to the top search result ("I'm Feeling Lucky")
+function browser_open_first_result {
+    local query="$1"
+    [[ "$OS_NAME" != "Darwin" ]] && return 0
+    echo "   🔗 Opening the first result..."
+    osascript -e 'tell application "System Events" to keystroke "l" using command down' 2>/dev/null
+    sleep 0.5
+    send_keys_instant "https://www.google.com/search?q=$(urlencode "$query")&btnI=I%27m+Feeling+Lucky"
+    sleep 0.3
+    press_enter
+}
+
+# Close the current browser tab
+function browser_close_tab {
+    [[ "$OS_NAME" != "Darwin" ]] && return 0
+    osascript -e 'tell application "System Events" to keystroke "w" using command down' 2>/dev/null
+}
+
+# Step away to "research": search, skim results, open the top result, read, close
 function browser_research {
     [[ "$ENABLE_BROWSER" != "true" ]] && return 0
     local file="$1"
-
-    echo "🌐 Taking a break to look something up..."
 
     local -a queries=()
     while IFS= read -r q; do queries+=("$q"); done < <(derive_search_queries "$file")
     [[ ${#queries[@]} -eq 0 ]] && return 0
 
-    local count=$(( 1 + RANDOM % 2 ))  # 1-2 searches
-    for (( n=0; n<count && n<${#queries[@]}; n++ )); do
-        local query="${queries[n]}"
-        echo "   🔎 Searching: \"$query\""
-        open_url "https://www.google.com/search?q=$(urlencode "$query")"
-        local read_time=$(( 6 + RANDOM % 15 ))
-        echo "   📖 Reading for ${read_time}s..."
-        capped_sleep "$read_time" || break
-    done
+    local query="${queries[RANDOM % ${#queries[@]}]}"
+    echo "🌐 Taking a break to look something up..."
+    echo "   🔎 Searching: \"$query\""
+    open_url "https://www.google.com/search?q=$(urlencode "$query")"
+    capped_sleep "$(( 3 + RANDOM % 4 ))" || { refocus_app "$KNOWN_EDITOR_APP"; return 0; }
+
+    echo "   📖 Skimming the results..."
+    browser_scroll "$(( 2 + RANDOM % 2 ))" || { browser_close_tab; refocus_app "$KNOWN_EDITOR_APP"; return 0; }
+
+    browser_open_first_result "$query"
+    capped_sleep "$(( 3 + RANDOM % 4 ))" || { browser_close_tab; refocus_app "$KNOWN_EDITOR_APP"; return 0; }
+
+    echo "   📖 Reading the article..."
+    browser_scroll "$(( 3 + RANDOM % 4 ))"
+
+    echo "   ❎ Closing the tab."
+    browser_close_tab
+    sleep 0.5
 
     echo "   ↩️  Back to the code."
     refocus_app "$KNOWN_EDITOR_APP"
