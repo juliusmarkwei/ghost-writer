@@ -15,6 +15,7 @@ ENABLE_BROWSER=true           # open the default browser and "research" topics
 ENABLE_SLACK=true             # open Slack and draft (never send) a message
 BREAK_CHANCE=45               # % chance of stepping away between files
 FILE_DWELL_SEC=120            # seconds to spend on a file before switching
+PANES_OPENED=0                # Warp panes opened so far (cap 2, split via Cmd+D)
 
 # Embedded Comprehensive Source (TypeScript)
 read -r -d '' DEFAULT_CONTENT << 'EOF'
@@ -721,15 +722,26 @@ function vim_save_and_continue {
     send_keys_instant "A"; sleep 0.15
 }
 
-# Confirm vim actually launched before we start sending buffer commands, so a
-# dropped Enter never blasts a file's contents into the shell prompt instead.
-function wait_for_vim {
+# Number of running vim processes (used to confirm a fresh launch)
+function count_vim {
     if [[ "$OS_NAME" != "Darwin" && "$OS_NAME" != "Linux" ]]; then
-        return 0  # pgrep unavailable on Windows/Git Bash; skip the guard
+        echo 999  # pgrep unavailable on Windows/Git Bash; skip the guard
+        return
+    fi
+    pgrep -x vim 2>/dev/null | grep -c . | tr -d ' '
+}
+
+# Wait until a NEW vim appears (count exceeds the given baseline), so a dropped
+# Enter never blasts a file's contents into the shell prompt instead. A baseline
+# lets this work even when another pane already has vim open.
+function wait_for_vim {
+    local baseline="${1:-0}"
+    if [[ "$OS_NAME" != "Darwin" && "$OS_NAME" != "Linux" ]]; then
+        return 0
     fi
     local tries=0
     while (( tries < 16 )); do
-        if pgrep -f "vim -- " >/dev/null 2>&1 || pgrep -x vim >/dev/null 2>&1; then
+        if (( $(count_vim) > baseline )); then
             return 0
         fi
         sleep 0.5
@@ -901,30 +913,52 @@ function cleanup {
 
 trap cleanup SIGINT SIGTERM
 
-# All files open together as buffers in one vim window
+# All files open together as buffers in one vim pane
 function open_editor_workspace {
     echo "📂 Ready to open files in vim..."
-    echo "   (All files open together in a new $TERMINAL_APP tab)"
+    echo "   (Files open in up to 2 $TERMINAL_APP split panes, reused each cycle)"
 }
 
 
-# Open every source file as a numbered buffer in ONE vim window
+# Open every source file as numbered buffers in ONE vim pane.
+# macOS/Warp: the first cycle opens a tab, the second splits it with Cmd+D
+# (max 2 panes), and later cycles reuse a pane instead of piling up tabs.
+# Returns non-zero if vim did not actually launch.
 function open_all_in_vim {
-    # Uses globals: TARGETS (array), SUBPROJECT_PATH, TERMINAL_APP, OS_NAME
-    echo "📂 Opening ${#TARGETS[@]} file(s) in a new tab..."
+    # Uses globals: TARGETS, SUBPROJECT_PATH, TERMINAL_APP, OS_NAME, PANES_OPENED
 
     if [[ "$OS_NAME" == "Darwin" ]]; then
-        # Open a new tab in the CURRENT terminal window (Cmd+T), then launch vim
-        # over a short glob (zero-padded names keep buffer order == source order).
         osascript -e "tell application \"$TERMINAL_APP\" to activate" 2>/dev/null
         sleep 0.8
-        osascript -e 'tell application "System Events" to keystroke "t" using command down' 2>/dev/null
-        sleep 2                     # wait for the new tab's shell prompt
+
+        if (( PANES_OPENED == 0 )); then
+            echo "📂 Opening ${#TARGETS[@]} file(s) in a new tab (pane 1)..."
+            osascript -e 'tell application "System Events" to keystroke "t" using command down' 2>/dev/null
+            sleep 2
+            PANES_OPENED=1
+        elif (( PANES_OPENED == 1 )); then
+            echo "📂 Opening ${#TARGETS[@]} file(s) in a split pane (Cmd+D, pane 2)..."
+            osascript -e 'tell application "System Events" to keystroke "d" using command down' 2>/dev/null
+            sleep 2
+            PANES_OPENED=2
+        else
+            echo "📂 Reusing an existing pane (max 2 reached) for ${#TARGETS[@]} file(s)..."
+            # Quit the vim already running in this pane, back to a shell prompt
+            press_escape; sleep 0.2
+            send_keys_instant ":qa!"; sleep 0.1
+            press_enter; sleep 1.2
+        fi
+
+        # Capture the vim count AFTER any quit so the guard sees a real increase
+        local baseline
+        baseline=$(count_vim)
         send_keys_instant "cd '$SUBPROJECT_PATH' && vim -- *"
         sleep 0.6                   # ensure the whole command is typed...
         press_enter                 # ...before submitting it
         sleep 3                     # give vim time to open every buffer
+        wait_for_vim "$baseline" || return 1
     elif [[ "$OS_NAME" == "Linux" ]]; then
+        echo "📂 Opening ${#TARGETS[@]} file(s) in a new terminal..."
         if command -v gnome-terminal &> /dev/null; then
             gnome-terminal --maximize -- vim "${TARGETS[@]}" &
         elif command -v xterm &> /dev/null; then
@@ -933,10 +967,13 @@ function open_all_in_vim {
             echo "⚠️  Please open vim manually in: $SUBPROJECT_PATH"
         fi
         sleep 2
+        wait_for_vim 0 || return 1
     else
+        echo "📂 Opening ${#TARGETS[@]} file(s) in a new window..."
         start /max bash -c "cd '$SUBPROJECT_PATH' && vim -- *" 2>/dev/null || echo "Please open vim manually in: $SUBPROJECT_PATH"
         sleep 2
     fi
+    return 0
 }
 
 # Type the whole batch by hopping between files a line or two at a time,
@@ -961,11 +998,9 @@ function run_typing_cycle {
         (( TOTAL[i] == 0 )) && DONE[i]=1
     done
 
-    open_all_in_vim
-
-    if ! wait_for_vim; then
-        echo "❌ vim did not open in the new tab — aborting this cycle so keystrokes"
-        echo "   don't land in your shell. Check that vim launches in $TERMINAL_APP."
+    if ! open_all_in_vim; then
+        echo "❌ vim did not open — aborting this cycle so keystrokes don't land in"
+        echo "   your shell. Check that vim launches in $TERMINAL_APP."
         return 1
     fi
     echo "✅ vim is open."
