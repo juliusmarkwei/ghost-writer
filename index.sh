@@ -11,7 +11,8 @@ MOUSE_MONITOR_ACTIVE=false
 # Human-behavior simulation
 TERMINAL_APP="Warp Preview"   # terminal that hosts the vim window
 SLACK_APP="Slack"             # Slack desktop app name
-ENABLE_BROWSER=true           # open the default browser and "research" topics
+ENABLE_BROWSER=true           # open the browser and "research" topics
+BROWSER_APP="Dia"             # browser used for research breaks (macOS)
 ENABLE_SLACK=true             # open Slack and draft (never send) a message
 BREAK_CHANCE=45               # % chance of stepping away between files
 FILE_DWELL_SEC=120            # seconds to spend on a file before switching
@@ -142,6 +143,7 @@ function show_help {
     echo "  --source <path>        Relative or absolute path to source file/directory"
     echo "  --terminal-app <name>  Terminal app to host vim (default: 'Warp Preview')"
     echo "  --slack-app <name>     Slack app name (default: 'Slack')"
+    echo "  --browser-app <name>   Browser for research breaks (default: 'Dia')"
     echo "  --no-browser           Disable browser 'research' breaks"
     echo "  --no-slack             Disable Slack breaks"
     echo "  --break-chance <0-100> Chance of stepping away between files (default: 45)"
@@ -169,6 +171,7 @@ while [[ "$#" -gt 0 ]]; do
         --source) SOURCE_FILE_RELATIVE="$2"; USER_PROVIDED_SOURCE=true; shift ;;
         --terminal-app) TERMINAL_APP="$2"; shift ;;
         --slack-app) SLACK_APP="$2"; shift ;;
+        --browser-app) BROWSER_APP="$2"; shift ;;
         --no-browser) ENABLE_BROWSER=false ;;
         --no-slack) ENABLE_SLACK=false ;;
         --break-chance) BREAK_CHANCE="$2"; shift ;;
@@ -629,11 +632,11 @@ function urlencode {
     echo "${s// /+}"
 }
 
-# Open a URL in the default browser without moving focus away from the keyboard
+# Open a URL in the configured browser (falls back to the default browser)
 function open_url {
     local url="$1"
     if [[ "$OS_NAME" == "Darwin" ]]; then
-        open "$url" 2>/dev/null
+        open -a "$BROWSER_APP" "$url" 2>/dev/null || open "$url" 2>/dev/null
     elif [[ "$OS_NAME" == "Linux" ]]; then
         xdg-open "$url" 2>/dev/null &
     else

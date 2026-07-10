@@ -7,7 +7,7 @@ A cross-platform CLI tool that simulates a developer at work in real-time. It re
 -   **Human-like Typing**: Variable typing speeds (150-380ms delays) to mimic realistic behavior
 -   **File Hopping**: Opens all files together as vim buffers and types a burst of 1-2 lines in one file, pauses, switches to another, and continues there—just like a real developer moving around a codebase
 -   **Realistic Pauses**: Occasional "thinking" pauses and longer "working through a tricky bit" breaks to simulate developer workflow
--   **Browser Research**: Steps away to search the web for topics derived from your code (language, class/function names) in your default browser
+-   **Browser Research**: Steps away to search the web for topics derived from your code (language, class/function names) in the Dia browser (configurable via `--browser-app`, falls back to your default browser)
 -   **Slack Presence**: Opens Slack, lingers, and drafts a message to a random member—**never sends anything** (the message is always cleared, Enter is never pressed)
 -   **Smart Focus Management**: Automatically detects and maintains focus on safe editor applications
 -   **Mouse Movement Detection**: Instantly stops when you move your mouse, giving you immediate control
@@ -211,7 +211,7 @@ ghost-writer --source src/components/ --duration 120 --min-delay 80 --max-delay 
     - Hops between files, typing a burst of 1-2 lines in one, then switching to another (`:bN`) and continuing where it left off
     - Preserves original indentation
     - Random delays between keystrokes, plus occasional "thinking" pauses
-5. **Stepping Away**: Every few file hops it may take a break—searching the web in your default browser for topics derived from your code, glancing at Slack (drafting but never sending a message), or just resting. Each break is time-boxed so the session never overruns `--duration`.
+5. **Stepping Away**: Every few file hops it may take a break—searching the web in the Dia browser for topics derived from your code, glancing at Slack (drafting but never sending a message), or just resting. Each break is time-boxed so the session never overruns `--duration`.
 6. **Looping**: After completing all files, waits briefly and restarts until duration expires
 
 ## 🛡️ Safety Features
